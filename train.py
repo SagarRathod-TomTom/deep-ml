@@ -1,8 +1,7 @@
 import os
 import numpy as np
 import torch
-from torch import optim
-from tqdm import tqdm_notebook
+from tqdm.auto import tqdm
 import csv
 
 
@@ -35,7 +34,7 @@ class Trainer:
                     },
                     os.path.join(self.model_save_path, model_file_name))
 
-    def evaluate(self, criterion, loader, use_gpu=False):
+    def validate(self, criterion, loader, use_gpu=False):
         if loader is None:
             raise Exception('Loader cannot be None.')
 
@@ -48,7 +47,7 @@ class Trainer:
         self.model.eval()
         losses = []
         with torch.no_grad():
-            for X, y in loader:
+            for X, y in tqdm(loader, desc="{:12s}".format('Validation')):
                 if use_gpu:
                     X = X.to(device)
                     y = y.to(device)
@@ -59,7 +58,7 @@ class Trainer:
         loss = np.mean(losses)
         return loss
 
-    def train(self, criterion, train_loader, val_loader=None, epochs=10, use_gpu=False,
+    def fit(self, criterion, train_loader, val_loader=None, epochs=10, use_gpu=False,
               steps_per_epoch=500, save_model_afer_every_epoch=5, lr_scheduler=None):
 
         """
@@ -80,7 +79,7 @@ class Trainer:
             # Iterate over batches
             step = 0
             lr_step_done = False
-            for batch_index, (X, y) in enumerate(train_loader):
+            for batch_index, (X, y) in tqdm(enumerate(train_loader), desc="{:12s}".format('Training')):
 
                 if use_gpu:
                     X = X.to(device)
@@ -94,7 +93,7 @@ class Trainer:
                 loss.backward()
                 self.optimizer.step()
 
-                if isinstance(lr_scheduler, optim.lr_scheduler.CyclicLR):
+                if isinstance(lr_scheduler, torch.optim.lr_scheduler.CyclicLR):
                     lr_scheduler.step()
                     lr_step_done = True
 
@@ -108,10 +107,10 @@ class Trainer:
 
             val_loss = np.inf
             if val_loader is not None:
-                val_loss = self.evaluate(criterion, val_loader, use_gpu)
+                val_loss = self.validate(criterion, val_loader, use_gpu)
                 stats_info = stats_info + "\tVal Loss: {:.6f}".format(val_loss)
 
-                if isinstance(lr_scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     lr_scheduler.step(val_loss)
                     lr_step_done = True
 
@@ -146,7 +145,7 @@ class Trainer:
         preds = []
         y_true = []
         with torch.no_grad():
-            for X, y in loader:
+            for X, y in tqdm(loader, desc="{:12s}".format('Prediction')):
                 if use_gpu:
                     X = X.to(device)
                 pred = self.model(X).cpu()
@@ -174,7 +173,7 @@ class Trainer:
         with torch.no_grad():
             for iteration in range(iterations):
                 print('Iteration:', iteration + 1)
-                for X, y in tqdm_notebook(loader):
+                for X, y in tqdm(loader, desc='Feature Extraction'):
                     X = X.cuda()
                     feature_set = self.model(X).cpu().numpy()
 
@@ -185,4 +184,3 @@ class Trainer:
                     csv_writer.writerows(feature_set)
                     fp.flush()
         fp.close()
-
