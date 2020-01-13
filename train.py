@@ -6,8 +6,7 @@ import csv
 
 
 class Trainer:
-    def __init__(self, model, optimizer, model_save_path, load_saved_model=False,
-                 model_file_name='latest_model.pt'):
+    def __init__(self, model, optimizer, model_save_path):
         self.model = model
         self.optimizer = optimizer
         self.model_save_path = model_save_path
@@ -15,16 +14,14 @@ class Trainer:
         self.best_val_loss = np.inf
         self.lr_rates = {}
 
-        if load_saved_model:
-            print('Loading Saved Model Weights.')
-            self.load_saved_model(model_file_name)
-
-    def load_saved_model(self, model_file_name):
-        state_dict = torch.load(os.path.join(self.model_save_path, model_file_name))
-        self.model.load_state_dict(state_dict['model'])
-        self.optimizer.load_state_dict(state_dict['optimizer'])
-        self.epochs_completed = state_dict['epoch']
-        self.best_val_loss = state_dict['metrics']['val_loss']
+    @staticmethod
+    def load_saved_model_weights(model, model_save_path, model_file_name='best_val_model.pt'):
+        state_dict = torch.load(os.path.join(model_save_path, model_file_name))
+        model.load_state_dict(state_dict['model'])
+        optimizer_state = state_dict['optimizer']
+        epochs_completed = state_dict['epoch']
+        best_val_loss = state_dict['metrics']['val_loss']
+        return model, optimizer_state, epochs_completed, best_val_loss
 
     def save_model_optim_state(self, model_file_name, epoch, train_loss, val_loss):
         torch.save({'model': self.model.state_dict(),
@@ -47,7 +44,7 @@ class Trainer:
         self.model.eval()
         losses = []
         with torch.no_grad():
-            for X, y in tqdm(loader, desc="{:12s}".format('Validation')):
+            for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Validation')):
                 if use_gpu:
                     X = X.to(device)
                     y = y.to(device)
@@ -79,7 +76,8 @@ class Trainer:
             # Iterate over batches
             step = 0
             lr_step_done = False
-            for batch_index, (X, y) in tqdm(enumerate(train_loader), desc="{:12s}".format('Training')):
+            for batch_index, (X, y) in tqdm(enumerate(train_loader), total=steps_per_epoch,
+                                            desc="{:12s}".format('Training')):
 
                 if use_gpu:
                     X = X.to(device)
@@ -145,7 +143,7 @@ class Trainer:
         preds = []
         y_true = []
         with torch.no_grad():
-            for X, y in tqdm(loader, desc="{:12s}".format('Prediction')):
+            for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
                 if use_gpu:
                     X = X.to(device)
                 pred = self.model(X).cpu()
@@ -173,7 +171,7 @@ class Trainer:
         with torch.no_grad():
             for iteration in range(iterations):
                 print('Iteration:', iteration + 1)
-                for X, y in tqdm(loader, desc='Feature Extraction'):
+                for X, y in tqdm(loader, total=len(loader), desc='Feature Extraction'):
                     X = X.cuda()
                     feature_set = self.model(X).cpu().numpy()
 
