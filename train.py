@@ -78,6 +78,8 @@ class Trainer:
 
         for epoch in range(self.epochs_completed, self.epochs_completed + epochs):
 
+            print('Epoch {}/{}:'.format(epoch, self.epochs_completed + epochs))
+
             # Training mode
             self.model.train()
 
@@ -109,6 +111,7 @@ class Trainer:
                 running_train_loss = running_train_loss + ((loss.item() - running_train_loss) / step)
                 bar.set_postfix({'Train loss': '{:.6f}'.format(running_train_loss)})
                 if step % steps_per_epoch == 0:
+                    bar.update(1)
                     break
 
             val_loss = np.inf
