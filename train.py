@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from tqdm.auto import tqdm
 import csv
+from torch.utils.tensorboard import SummaryWriter
 
 
 class Trainer:
@@ -15,11 +16,13 @@ class Trainer:
         self.epochs_completed = 0
         self.best_val_loss = np.inf
         self.lr_rates = {}
+        self.writer = SummaryWriter()
 
         if load_saved_model:
             self.load_saved_model(model_file_name)
 
     def load_saved_model(self, model_file_name):
+        print('Loading Saved Model Weights.')
         state_dict = torch.load(os.path.join(self.model_save_path, model_file_name))
         self.model.load_state_dict(state_dict['model'])
         self.optimizer.load_state_dict(state_dict['optimizer'])
@@ -76,9 +79,10 @@ class Trainer:
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader) + 1  # Number of batches + 1, since batch index starts with 0
 
-        for epoch in range(self.epochs_completed, self.epochs_completed + epochs):
+        epochs = self.epochs_completed + epochs
+        for epoch in range(self.epochs_completed, epochs):
 
-            print('Epoch {}/{}:'.format(epoch, self.epochs_completed + epochs))
+            print('Epoch {}/{}:'.format(epoch + 1, epochs))
 
             # Training mode
             self.model.train()
@@ -114,9 +118,12 @@ class Trainer:
                     bar.update(1)
                     break
 
+            stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, running_train_loss)
+
             val_loss = np.inf
             if val_loader is not None:
                 val_loss = self.validate(criterion, val_loader, use_gpu)
+                stats_info = stats_info + "\tVal Loss: {:.6f}".format(val_loss)
 
                 if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     lr_scheduler.step(val_loss)
@@ -132,6 +139,9 @@ class Trainer:
             if lr_scheduler is not None and not lr_step_done:
                 lr_scheduler.step()
                 lr_step_done = True
+
+            # print training/validation statistics
+            print(stats_info)
 
             if epoch % save_model_afer_every_epoch == 0:
                 model_file_name = "model_epoch_{}.pt".format(epoch)
