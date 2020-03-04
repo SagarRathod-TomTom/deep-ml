@@ -1,2 +1,8 @@
-# pytorch_trainer_utility
-Minimal trainer class for training neural nets in pytorch
+# PytorchDeepML
+
+
+This library is useful for experimenting image classification and semantic
+segmentation problems.
+
+
+###### Still Cooking...
