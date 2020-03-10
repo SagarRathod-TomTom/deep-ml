@@ -1,7 +1,7 @@
 # PytorchDeepML
 
 
-This library is useful for experimenting image classification and semantic
+This project is useful for solving image classification and semantic
 segmentation problems.
 
 
