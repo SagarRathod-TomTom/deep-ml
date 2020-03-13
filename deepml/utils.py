@@ -1,7 +1,7 @@
 import os
 import glob
 import torch
-from constants import RUN_DIR_NAME
+from deepml.constants import RUN_DIR_NAME
 
 
 def find_current_run_number(target_dir):
