@@ -14,10 +14,16 @@ setuptools.setup(
     url="https://github.com/sagar-rathod/PytorchDeepML",
     packages=setuptools.find_packages(),
     classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: MIT License",
+        "Development Status :: 4 - Beta",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        "Topic :: Software Development :: Libraries",
+        "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     python_requires='>=3.6',
-    install_requires=['torch>=1.0.0', 'torchvision>=0.2.1']
+    install_requires=['torch>=1.0.0', 'torchvision>=0.2.1', 'tensorboard>=1.14.0']
 )
