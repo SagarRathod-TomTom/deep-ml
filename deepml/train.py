@@ -6,9 +6,9 @@ import torch
 from tqdm.auto import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
-import utils
-from constants import RUN_DIR_NAME
-from transforms import ImageNetInverseTransform
+from deepml import utils
+from deepml.constants import RUN_DIR_NAME
+from deepml.transforms import ImageNetInverseTransform
 
 
 class Trainer:

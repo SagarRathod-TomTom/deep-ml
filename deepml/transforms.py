@@ -1,7 +1,7 @@
 import numpy as np
 import torchvision
 import torch
-import constants
+from deepml import constants
 
 
 class AlbumentationTorchCompat:
