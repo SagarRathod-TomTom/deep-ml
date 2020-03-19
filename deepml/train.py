@@ -47,11 +47,8 @@ class Trainer:
         if loader is None:
             raise Exception('Loader cannot be None.')
 
-        if use_gpu:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            self.model = self.model.to(device)
-        else:
-            device = torch.device("cpu")
+        device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(device)
 
         self.model.eval()
         running_loss = 0
@@ -82,12 +79,8 @@ class Trainer:
         steps_per_epoch = should be around len(train_loader),
             so that every example in the dataset gets covered in each epoch.
         """
-
-        if use_gpu:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            self.model = self.model.to(device)
-        else:
-            device = torch.device("cpu")
+        device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(device)
 
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
@@ -197,11 +190,8 @@ class Trainer:
 
     def predict_proba(self, loader, use_gpu=False):
 
-        if use_gpu:
-            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-            self.model = self.model.to(device)
-        else:
-            device = torch.device("cpu")
+        device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(device)
 
         self.model.eval()
         preds = []
@@ -217,7 +207,10 @@ class Trainer:
         return torch.cat(preds), torch.cat(y_true)
 
     def extract_features(self, loader, no_of_features, features_csv_file, iterations=1,
-                         target_known=True):
+                         target_known=True, use_gpu=False):
+
+        device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
+        self.model = self.model.to(device)
 
         fp = open(features_csv_file, 'w')
         csv_writer = csv.writer(fp)
@@ -236,7 +229,7 @@ class Trainer:
             for iteration in range(iterations):
                 print('Iteration:', iteration + 1)
                 for X, y in tqdm(loader, total=len(loader), desc='Feature Extraction'):
-                    X = X.cuda()
+                    X = X.to(device)
                     feature_set = self.model(X).cpu().numpy()
 
                     if target_known:
