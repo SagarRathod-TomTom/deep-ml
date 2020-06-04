@@ -37,7 +37,7 @@ class ImageRowDataFrameDataset(Dataset):
 
 
 class ImageFileDataFrameDataset(Dataset):
-    """ This class is useful for reading dataset of images for image classification problem.
+    """ This class is useful for reading dataset of images for image classification/regression problem.
     """
     def __init__(self, dataframe, img_file_path_column='image', target_column='target',
                  image_dir=None, transforms=None, open_file_func=None, shuffle=False):
