@@ -18,3 +18,14 @@ class JaccardLoss(torch.nn.modules.loss._Loss):
 
         jac = (intersection / (union - intersection + 1e-7)).mean()
         return 1 - jac
+
+
+class RMSELoss(torch.nn.modules.loss._Loss):
+    def __init__(self, eps=1e-6):
+        super().__init__()
+        self.mse = torch.nn.MSELoss()
+        self.eps = eps
+
+    def forward(self, output, target):
+        return torch.sqrt(self.mse(output.squeeze(), target)
+                          + self.eps)
