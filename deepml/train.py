@@ -135,7 +135,7 @@ class Trainer:
                     bar.update(1)
                     bar.set_postfix({'Train loss': '{:.6f}'.format(running_train_loss)})
 
-                if step % steps_per_epoch == 0:
+                if step % steps_per_epoch == 0 and y.ndim > 1:
                     self.writer.add_images('Images/Train/Input/', viz_reverse_transform(X), epoch + 1)
                     self.writer.add_images('Images/Train/Target', y, epoch + 1)
                     self.writer.add_images('Images/Train/Output', utils.binarize(outputs), epoch + 1)
@@ -157,9 +157,10 @@ class Trainer:
                         X, y = next(iter(val_loader))
                         X, y = X.cuda(), y.cuda()
                         outputs = self.model(X)
-                        self.writer.add_images('Images/Val/Input/', viz_reverse_transform(X), epoch + 1)
-                        self.writer.add_images('Images/Val/Target', y)
-                        self.writer.add_images('Images/Val/Output', utils.binarize(outputs), epoch + 1)
+                        if y.ndim > 1:
+                            self.writer.add_images('Images/Val/Input/', viz_reverse_transform(X), epoch + 1)
+                            self.writer.add_images('Images/Val/Target', y)
+                            self.writer.add_images('Images/Val/Output', utils.binarize(outputs), epoch + 1)
 
                 if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     lr_scheduler.step(val_loss)
