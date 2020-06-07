@@ -39,8 +39,8 @@ class ImageRowDataFrameDataset(Dataset):
 class ImageFileDataFrameDataset(Dataset):
     """ This class is useful for reading dataset of images for image classification/regression problem.
     """
-    def __init__(self, dataframe, img_file_path_column='image', target_column='target',
-                 image_dir=None, transforms=None, open_file_func=None, shuffle=False):
+    def __init__(self, dataframe, img_file_path_column='image', target_column=None,
+                 image_dir=None, transforms=None, open_file_func=None):
 
         self.dataframe = dataframe
         self.img_file_path_column = img_file_path_column
@@ -49,9 +49,6 @@ class ImageFileDataFrameDataset(Dataset):
         self.transforms = transforms
         self.samples = self.dataframe.shape[0]
         self.open_file_func = open_file_func
-
-        if shuffle:
-            self.dataframe = self.dataframe.sample(frac=1).reset_index(drop=True)
 
     def __len__(self):
         return self.samples
@@ -68,12 +65,40 @@ class ImageFileDataFrameDataset(Dataset):
         else:
             X = self.open_file_func(image_file)
 
-        y = torch.tensor(self.dataframe.loc[index, self.target_column])
+        y = 0
+        if self.target_column is not None:
+            y = torch.tensor(self.dataframe.loc[index, self.target_column])
 
         if self.transforms is not None:
             X = self.transforms(X)
 
         return X, y
+
+
+class ImageListDataset(Dataset):
+
+    def __init__(self, image_dir, transforms=None, open_file_func=None):
+
+        self.image_dir = image_dir
+        self.images = os.listdir(image_dir)
+        self.transforms = transforms
+        self.open_file_func = open_file_func
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+
+        image_file = self.images[index]
+        if self.open_file_func is None:
+            X = Image.open(os.path.join(self.image_dir, image_file))
+        else:
+            X = self.open_file_func(os.path.join(self.image_dir, image_file))
+
+        if self.transforms is not None:
+            X = self.transforms(X)
+
+        return X, image_file
 
 
 class SemSegImageFileDataFrameDataset(Dataset):
