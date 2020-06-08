@@ -13,20 +13,16 @@ def get_datetime():
     return '-'.join((date.replace('-','_'), timestamp.replace(':', '_').split('.')[0]))
 
 
-def find_current_run_number(target_dir):
+def find_new_run_dir_name(target_dir):
     files = glob.glob(os.path.join(target_dir, '{}*'.format(RUN_DIR_NAME)))
 
     if len(files) == 0:
         return 1
 
-    run = 0
-    for file in files:
-        current = int(os.path.split(file)[1].split('_')[1])
-        if current > run:
-            run = current
+    run_numbers = map(lambda filename: int(filename.split('.')[-1]), files)
 
     # Return new run number
-    return run + 1
+    return RUN_DIR_NAME + str(max(run_numbers) + 1)
 
 
 def binarize(output: torch.FloatTensor, threshold: float = 0.50):

@@ -8,7 +8,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from deepml import utils
 from deepml.transforms import ImageNetInverseTransform
-from deepml.constants import RUN_DIR_NAME
 
 
 class Learner:
@@ -22,7 +21,8 @@ class Learner:
         self.best_val_loss = np.inf
         self.lr_rates = {}
         os.makedirs(self.model_save_path, exist_ok=True)
-        self.writer = SummaryWriter(os.path.join(self.model_save_path, RUN_DIR_NAME + utils.get_datetime()))
+        self.writer = SummaryWriter(os.path.join(self.model_save_path,
+                                                 utils.find_new_run_dir_name(self.model_save_path)))
         self.device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
 
         if load_saved_model and model_file_name is not None:
