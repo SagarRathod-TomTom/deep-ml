@@ -49,8 +49,8 @@ class Learner:
 
     def save(self, model_file_name, save_optimizer_state=False, epoch=None, train_loss=None, val_loss=None):
         # Convert model into cpu before saving the model state
-        cpu_model = self.__model.to("cpu")
-        save_dict = {'model': cpu_model.state_dict()}
+        self.__model.to("cpu")
+        save_dict = {'model': self.__model.state_dict()}
 
         if save_optimizer_state:
             save_dict['optimizer'] = self.__optimizer.__class__.__name__
@@ -63,6 +63,7 @@ class Learner:
             save_dict['metrics'] = {'train_loss': train_loss, 'val_loss': val_loss}
 
         torch.save(save_dict, os.path.join(self.model_save_path, model_file_name))
+        self.__model.to(self.device)
 
     def validate(self, criterion, loader, show_progress=True):
         if loader is None:
