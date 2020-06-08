@@ -122,12 +122,13 @@ class Learner:
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
 
+        self.__model = self.__model.to(self.device)
+        criterion = criterion.to(self.device)
+
         # Write graph to tensorboard
         if torch.cuda.is_available():
             self.writer.add_graph(self.__model, next(iter(train_loader))[0].cuda())
 
-        self.__model = self.__model.to(self.device)
-        criterion = criterion.to(self.device)
         epochs = self.epochs_completed + epochs
         for epoch in range(self.epochs_completed, epochs):
 
