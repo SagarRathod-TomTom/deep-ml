@@ -17,7 +17,7 @@ def find_new_run_dir_name(target_dir):
     files = glob.glob(os.path.join(target_dir, '{}*'.format(RUN_DIR_NAME)))
 
     if len(files) == 0:
-        return 1
+        return RUN_DIR_NAME + str(1)
 
     run_numbers = map(lambda filename: int(filename.split('.')[-1]), files)
 
