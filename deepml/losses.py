@@ -27,5 +27,5 @@ class RMSELoss(torch.nn.modules.loss._Loss):
         self.eps = eps
 
     def forward(self, output, target):
-        return torch.sqrt(self.mse(output.squeeze(), target)
+        return torch.sqrt(self.mse(output.squeeze(), target.to(torch.float32))
                           + self.eps)
