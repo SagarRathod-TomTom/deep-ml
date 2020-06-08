@@ -8,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from deepml import utils
 from deepml.transforms import ImageNetInverseTransform
+from deepml.constants import RUN_DIR_NAME
 
 
 class Learner:
@@ -20,7 +21,8 @@ class Learner:
         self.epochs_completed = 0
         self.best_val_loss = np.inf
         self.lr_rates = {}
-        self.writer = SummaryWriter(model_save_path)
+        os.makedirs(self.model_save_path, exist_ok=True)
+        self.writer = SummaryWriter(os.path.join(self.model_save_path, RUN_DIR_NAME + utils.get_datetime()))
         self.device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
         self.__model = self.__model.to(self.device)
 
@@ -88,23 +90,42 @@ class Learner:
         return running_loss
 
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
-            save_model_afer_every_epoch=5, lr_scheduler=None,
-            viz_reverse_transform=None, show_progress=True):
-
+            save_model_after_every_epoch=5, lr_scheduler=None,
+            viz_inverse_transform=ImageNetInverseTransform(), show_progress=True):
         """
-        steps_per_epoch = should be around len(train_loader),
-            so that every example in the dataset gets covered in each epoch.
-        """
+        Starts training the model on specified train loader
 
+        Parameters
+        ----------
+        criterion: loss function to optimize
+
+        train_loader: The torch.utils.data.DataLoader for model to train on.
+
+        val_loader: The torch.utils.data.DataLoader for model to validate on.
+        Default is None.
+
+        epochs: int The number of epochs to train. Default is 10
+
+        steps_per_epoch: Should be around len(train_loader),
+        so that every example in the dataset gets covered in each epoch.
+
+        save_model_after_every_epoch: To save the model after every number of completed epochs
+        Default is 5.
+
+        lr_scheduler: the learning rate scheduler, default is None.
+
+        viz_inverse_transform: It denotes reverse transformations of image normalization so that images
+        can be displayed on tensor board. Default is deepml.transforms.ImageNetInverseTransform() which is
+        an inverse of ImageNet normalization.
+
+        show_progress: Show progress during training and validation. Default is True
+        """
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
 
         # Write graph to tensorboard
         if torch.cuda.is_available():
             self.writer.add_graph(self.__model, next(iter(train_loader))[0].cuda())
-
-        if viz_reverse_transform is None:
-            viz_reverse_transform = ImageNetInverseTransform()
 
         criterion = criterion.to(self.device)
         epochs = self.epochs_completed + epochs
@@ -149,7 +170,7 @@ class Learner:
                     bar.set_postfix({'Train loss': '{:.6f}'.format(running_train_loss)})
 
                 if step % steps_per_epoch == 0:
-                    self.writer.add_images('Images/Train/Input/', viz_reverse_transform(X), epoch + 1)
+                    self.writer.add_images('Images/Train/Input/', viz_inverse_transform(X), epoch + 1)
                     if y.ndim > 1:
                         self.writer.add_images('Images/Train/Target', y, epoch + 1)
                         self.writer.add_images('Images/Train/Output', utils.binarize(outputs), epoch + 1)
@@ -160,19 +181,19 @@ class Learner:
 
             val_loss = np.inf
             if val_loader is not None:
-                val_loss = self.validate(criterion, val_loader, use_gpu, show_progress)
+                val_loss = self.validate(criterion, val_loader, show_progress)
                 stats_info = stats_info + "\tVal Loss: {:.6f}".format(val_loss)
                 self.writer.add_scalar('Loss/Val', val_loss, epoch + 1)
 
                 # Log lass batch of val images to viz
-                if viz_reverse_transform is not None and torch.cuda.is_available():
+                if viz_inverse_transform is not None and torch.cuda.is_available():
                     self.__model.eval()
                     with torch.no_grad():
                         X, y = next(iter(val_loader))
                         X, y = X.cuda(), y.cuda()
                         outputs = self.__model(X)
                         if y.ndim > 1:
-                            self.writer.add_images('Images/Val/Input/', viz_reverse_transform(X), epoch + 1)
+                            self.writer.add_images('Images/Val/Input/', viz_inverse_transform(X), epoch + 1)
                             self.writer.add_images('Images/Val/Target', y)
                             self.writer.add_images('Images/Val/Output', utils.binarize(outputs), epoch + 1)
 
@@ -197,12 +218,11 @@ class Learner:
             # print training/validation statistics
             print(stats_info)
             self.writer.flush()
-            if epoch % save_model_afer_every_epoch == 0:
+            if epoch % save_model_after_every_epoch == 0:
                 model_file_name = "model_epoch_{}.pt".format(epoch)
                 self.save(model_file_name, save_optimizer_state=True, epoch=epoch,
                           train_loss=running_train_loss, val_loss=val_loss)
 
-        self.writer.close()
         # Save latest model at the end
         self.save("latest_model.pt", save_optimizer_state=True, epoch=epoch, train_loss=running_train_loss,
                   val_loss=self.best_val_loss)

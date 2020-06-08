@@ -5,6 +5,12 @@ import torch
 from matplotlib import pyplot as plt
 import numpy as np
 from deepml.constants import RUN_DIR_NAME
+from datetime import datetime
+
+
+def get_datetime():
+    date, timestamp = str(datetime.now()).split(' ')
+    return '-'.join((date.replace('-','_'), timestamp.replace(':', '_').split('.')[0]))
 
 
 def find_current_run_number(target_dir):
