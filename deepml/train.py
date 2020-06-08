@@ -24,7 +24,6 @@ class Learner:
         os.makedirs(self.model_save_path, exist_ok=True)
         self.writer = SummaryWriter(os.path.join(self.model_save_path, RUN_DIR_NAME + utils.get_datetime()))
         self.device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
-        self.__model = self.__model.to(self.device)
 
         if load_saved_model and model_file_name is not None:
             self.load_saved_model(os.path.join(self.model_save_path, model_file_name),
@@ -127,6 +126,7 @@ class Learner:
         if torch.cuda.is_available():
             self.writer.add_graph(self.__model, next(iter(train_loader))[0].cuda())
 
+        self.__model = self.__model.to(self.device)
         criterion = criterion.to(self.device)
         epochs = self.epochs_completed + epochs
         for epoch in range(self.epochs_completed, epochs):
