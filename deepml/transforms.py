@@ -43,21 +43,24 @@ class AlbumentationTorchCompat:
         return image, mask
 
 
-class ImageNetInverseTransform:
+class ImageInverseTransform:
+    """ Implementation of the inverse transform for image using mean and std_dev
+        Accepts image_batch in #B, #C, #H #W order
+    """
+    def __init__(self, mean, std):
+        super(ImageInverseTransform, self).__init__()
+        self.mean = torch.tensor(mean)
+        self.std = torch.tensor(std)
+
+    def __call__(self, image_batch):
+        return image_batch * self.std[:, None, None] + self.mean[:, None, None]
+
+
+class ImageNetInverseTransform(ImageInverseTransform):
     '''
        Imagenet inverse transform
        accepts image_batch in #B, #C, #H #W order
    '''
-
-    def __init__(self, use_gpu=True):
-        super(ImageNetInverseTransform, self).__init__()
-        self.mean = torch.tensor(constants.IMAGENET_MEAN)
-        self.std = torch.tensor(constants.IMAGENET_STD)
-
-        if use_gpu:
-            self.mean = self.mean.cuda()
-            self.std = self.std.cuda()
-
-    def __call__(self, image_batch):
-
-        return image_batch * self.std[:, None, None] + self.mean[:, None, None]
+    def __init__(self):
+        super(ImageNetInverseTransform, self).__init__(constants.IMAGENET_MEAN,
+                                                       constants.IMAGENET_STD)

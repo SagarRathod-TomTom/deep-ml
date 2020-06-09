@@ -91,7 +91,7 @@ class Learner:
 
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
             save_model_after_every_epoch=5, lr_scheduler=None,
-            viz_inverse_transform=ImageNetInverseTransform(), show_progress=True):
+            image_inverse_transform=ImageNetInverseTransform(), show_progress=True):
         """
         Starts training the model on specified train loader
 
@@ -114,7 +114,7 @@ class Learner:
 
         lr_scheduler: the learning rate scheduler, default is None.
 
-        viz_inverse_transform: It denotes reverse transformations of image normalization so that images
+        image_inverse_transform: It denotes reverse transformations of image normalization so that images
         can be displayed on tensor board. Default is deepml.transforms.ImageNetInverseTransform() which is
         an inverse of ImageNet normalization.
 
@@ -172,7 +172,7 @@ class Learner:
                     bar.set_postfix({'Train loss': '{:.6f}'.format(running_train_loss)})
 
                 if step % steps_per_epoch == 0:
-                    self.writer.add_images('Images/Train/Input/', viz_inverse_transform(X), epoch + 1)
+                    self.writer.add_images('Images/Train/Input/', image_inverse_transform(X), epoch + 1)
                     if y.ndim > 1:
                         self.writer.add_images('Images/Train/Target', y, epoch + 1)
                         self.writer.add_images('Images/Train/Output', utils.binarize(outputs), epoch + 1)
@@ -188,14 +188,14 @@ class Learner:
                 self.writer.add_scalar('Loss/Val', val_loss, epoch + 1)
 
                 # Log lass batch of val images to viz
-                if viz_inverse_transform is not None and torch.cuda.is_available():
+                if image_inverse_transform is not None:
                     self.__model.eval()
                     with torch.no_grad():
                         X, y = next(iter(val_loader))
-                        X, y = X.cuda(), y.cuda()
+                        X, y = X.to(self.device), y.cuda(self.device)
                         outputs = self.__model(X)
+                        self.writer.add_images('Images/Val/Input/', image_inverse_transform(X), epoch + 1)
                         if y.ndim > 1:
-                            self.writer.add_images('Images/Val/Input/', viz_inverse_transform(X), epoch + 1)
                             self.writer.add_images('Images/Val/Target', y)
                             self.writer.add_images('Images/Val/Output', utils.binarize(outputs), epoch + 1)
 
@@ -275,3 +275,14 @@ class Learner:
                     csv_writer.writerows(feature_set)
                     fp.flush()
         fp.close()
+
+    def show_predictions(self, loader, samples=10, image_inverse_transform=ImageNetInverseTransform(),
+                         classes=None):
+        self.__model.eval()
+        with torch.no_grad():
+            image_title_generator = ((utils.transform_input(x, image_inverse_transform),
+                                      f'Ground Truth={utils.transform_target(y, classes)}'
+                                      f'\nPrediction={utils.transform_output(self.__model(x.to(self.device)))}'
+                                      for x, y in loader))
+
+            utils.plot_images(image_title_generator, samples=samples)
