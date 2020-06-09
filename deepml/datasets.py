@@ -50,6 +50,14 @@ class ImageFileDataFrameDataset(Dataset):
         self.samples = self.dataframe.shape[0]
         self.open_file_func = open_file_func
 
+        self.classes = {}
+        # if target column is object then find out number of classes
+        if self.target_column is not None and self.dataframe[self.target_column].dtype == "object":
+            self.classes = {class_label: class_index
+                            for class_index, class_label, in
+                            enumerate(sorted(
+                                self.dataframe[self.target_column].value_counts().index.tolist()))}
+
     def __len__(self):
         return self.samples
 
@@ -68,6 +76,10 @@ class ImageFileDataFrameDataset(Dataset):
         y = 0
         if self.target_column is not None:
             y = torch.tensor(self.dataframe.loc[index, self.target_column])
+
+            # Replace target class with class index
+            if y in self.classes:
+                y = self.classes[y]
 
         if self.transforms is not None:
             X = self.transforms(X)
