@@ -269,7 +269,7 @@ class Learner:
                     feature_set = self.__model(X).cpu().numpy()
 
                     if target_known:
-                        y = y.numpy().reshape(-1,1)
+                        y = y.numpy().reshape(-1, 1)
                         feature_set = np.hstack([y, feature_set])
 
                     csv_writer.writerows(feature_set)
@@ -280,9 +280,9 @@ class Learner:
                          classes=None):
         self.__model.eval()
         with torch.no_grad():
-            image_title_generator = ((utils.transform_input(x, image_inverse_transform),
-                                      f'Ground Truth={utils.transform_target(y, classes)}'
-                                      f'\nPrediction={utils.transform_output(self.__model(x.to(self.device)))}'
+            image_title_generator = (((utils.transform_input(x, image_inverse_transform),
+                                       f'Ground Truth={utils.transform_target(y, classes)}'
+                                       f'Prediction={utils.transform_output(self.__model(x.to(self.device)))}')
                                       for x, y in loader))
 
             utils.plot_images(image_title_generator, samples=samples)
