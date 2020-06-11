@@ -91,7 +91,7 @@ class Learner:
 
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
             save_model_after_every_epoch=5, lr_scheduler=None,
-            image_inverse_transform=ImageNetInverseTransform(), show_progress=True):
+            image_inverse_transform=None, show_progress=True):
         """
         Starts training the model on specified train loader
 
@@ -129,6 +129,9 @@ class Learner:
         # Write graph to tensorboard
         if torch.cuda.is_available():
             self.writer.add_graph(self.__model, next(iter(train_loader))[0].cuda())
+
+        if image_inverse_transform is None:
+            image_inverse_transform = ImageNetInverseTransform(use_gpu=False if self.device == "cpu" else True)
 
         epochs = self.epochs_completed + epochs
         for epoch in range(self.epochs_completed, epochs):
@@ -269,20 +272,23 @@ class Learner:
                     feature_set = self.__model(X).cpu().numpy()
 
                     if target_known:
-                        y = y.numpy().reshape(-1, 1)
+                        y = y.numpy().reshape(-1,1)
                         feature_set = np.hstack([y, feature_set])
 
                     csv_writer.writerows(feature_set)
                     fp.flush()
         fp.close()
 
-    def show_predictions(self, loader, samples=10, image_inverse_transform=ImageNetInverseTransform(),
+    def show_predictions(self, loader, samples=10, image_inverse_transform=None,
                          classes=None):
+        if image_inverse_transform is None:
+            image_inverse_transform = ImageNetInverseTransform(use_gpu=False if self.device == "cpu" else True)
+
         self.__model.eval()
         with torch.no_grad():
             image_title_generator = (((utils.transform_input(x, image_inverse_transform),
-                                       f'Ground Truth={utils.transform_target(y, classes)}'
-                                       f'Prediction={utils.transform_output(self.__model(x.to(self.device)))}')
+                                      f'Ground Truth={utils.transform_target(y, classes)}'
+                                      f'Prediction={utils.transform_output(self.__model(x.to(self.device)))}')
                                       for x, y in loader))
 
             utils.plot_images(image_title_generator, samples=samples)
