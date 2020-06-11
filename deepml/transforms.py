@@ -47,10 +47,13 @@ class ImageInverseTransform:
     """ Implementation of the inverse transform for image using mean and std_dev
         Accepts image_batch in #B, #C, #H #W order
     """
-    def __init__(self, mean, std):
+    def __init__(self, mean, std, use_gpu=False):
         super(ImageInverseTransform, self).__init__()
         self.mean = torch.tensor(mean)
         self.std = torch.tensor(std)
+        if use_gpu:
+            self.mean = self.mean.cuda()
+            self.std = self.std.cuda()
 
     def __call__(self, image_batch):
         return image_batch * self.std[:, None, None] + self.mean[:, None, None]
@@ -61,6 +64,6 @@ class ImageNetInverseTransform(ImageInverseTransform):
        Imagenet inverse transform
        accepts image_batch in #B, #C, #H #W order
    '''
-    def __init__(self):
+    def __init__(self, use_gpu=False):
         super(ImageNetInverseTransform, self).__init__(constants.IMAGENET_MEAN,
-                                                       constants.IMAGENET_STD)
+                                                       constants.IMAGENET_STD, use_gpu)
