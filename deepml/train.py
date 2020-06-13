@@ -98,7 +98,7 @@ class Learner:
 
         self.__model.eval()
         with torch.no_grad():
-            prediction = self.__model(x)
+            prediction = self.__model(x.to(self.device)).cpu()
 
             if classes and len(classes) > 1:
                 try:
