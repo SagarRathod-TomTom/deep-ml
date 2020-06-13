@@ -155,6 +155,8 @@ class Learner:
 
         if self.predictor is None:
             x, _ = train_loader.dataset[0]
+            # Add batch dimension
+            x = x.unsqueeze(dim=0)
             self.predictor = self.__infer_predictor(x, classes)
 
         # Write graph to tensorboard
