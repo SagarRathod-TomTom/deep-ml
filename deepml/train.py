@@ -298,13 +298,20 @@ class Learner:
                     fp.flush()
         fp.close()
 
-    def show_predictions(self, loader, samples=10, image_inverse_transform=None, figsize=(10,10)):
+    def show_predictions(self, loader, image_inverse_transform=None, samples=10, cols=4, figsize=(10,10)):
 
+        self.__model = self.__model.to(self.device)
         self.__model.eval()
-        with torch.no_grad():
-            image_title_generator = (((self.predictor.transform_input(x, image_inverse_transform),
-                                      f'Ground Truth={self.predictor.transform_target(y)}'
-                                      f'Prediction={self.predictor.transform_output(self.__model(x.to(self.device)))}')
-                                      for x, y in loader))
 
-            utils.plot_images(image_title_generator, samples=samples, figsize=figsize)
+        with torch.no_grad():
+            indexes = np.random.randint(0, len(loader.dataset), samples)
+
+            def transform(input_batch):
+                x, y = input_batch
+                prediction = self.__model(x.unsqueeze(dim=0).to(self.device)).cpu()
+                return (self.predictor.transform_input(x, image_inverse_transform),
+                        f'Ground Truth={self.predictor.transform_target(y)} '
+                        f'\nPrediction={self.predictor.transform_output(prediction)}')
+
+            image_title_generator = (transform(loader.dataset[index]) for index in indexes)
+            utils.plot_images(image_title_generator, samples=samples, cols=cols, figsize=figsize)
