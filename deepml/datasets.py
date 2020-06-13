@@ -13,22 +13,30 @@ class ImageRowDataFrameDataset(Dataset):
         Each row is assume to be the flattened array of an image.
         Each row is then reshaped to the provided image_size.
     """
-    def __init__(self, X: pd.DataFrame, y: pd.Series, image_size=(28, 28),
+    def __init__(self, dataframe:pd.DataFrame, target_column=None, image_size=(28, 28),
                  transform=None):
-        self.X_df = X
-        self.y_df = y
-        self.samples = X.shape[0]
+        self.dataframe = dataframe.reset_index(drop=True, inplace=False)
+        self.target_column = None
+
+        if target_column is not None:
+            self.target_column = self.dataframe[target_column]
+            self.dataframe.drop(target_column, axis=1, inplace=True)
+
+        self.samples = self.dataframe.shape[0]
         self.image_size = image_size
         self.transform = transform
 
     def __getitem__(self, index):
 
-        X = self.X_df.iloc[index]
-        y = self.y_df.iloc[index]
+        X = self.dataframe.iloc[index]
 
         X = Image.fromarray(X.to_numpy().reshape(self.image_size).astype(np.uint8))
         if self.transform is not None:
             X = self.transform(X)
+
+        y = 0
+        if self.target_column is not None:
+            y = torch.tensor(self.target_column.loc[index])
 
         return X, y
 
@@ -42,21 +50,13 @@ class ImageFileDataFrameDataset(Dataset):
     def __init__(self, dataframe, img_file_path_column='image', target_column=None,
                  image_dir=None, transforms=None, open_file_func=None):
 
-        self.dataframe = dataframe
+        self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.img_file_path_column = img_file_path_column
         self.target_column = target_column
         self.image_dir = image_dir
         self.transforms = transforms
         self.samples = self.dataframe.shape[0]
         self.open_file_func = open_file_func
-
-        self.classes = {}
-        # if target column is object then find out number of classes
-        if self.target_column is not None and self.dataframe[self.target_column].dtype == "object":
-            self.classes = {class_label: class_index
-                            for class_index, class_label, in
-                            enumerate(sorted(
-                                self.dataframe[self.target_column].value_counts().index.tolist()))}
 
     def __len__(self):
         return self.samples
@@ -76,10 +76,6 @@ class ImageFileDataFrameDataset(Dataset):
         y = 0
         if self.target_column is not None:
             y = torch.tensor(self.dataframe.loc[index, self.target_column])
-
-            # Replace target class with class index
-            if y in self.classes:
-                y = self.classes[y]
 
         if self.transforms is not None:
             X = self.transforms(X)
@@ -124,7 +120,7 @@ class SemSegImageFileDataFrameDataset(Dataset):
 
     """
     def __init__(self, dataframe, image_dir, mask_dir, transforms=None, open_file_func=None):
-        self.dataframe = dataframe
+        self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.image_dir = image_dir
         self.mask_dir = mask_dir
         self.transforms = transforms
