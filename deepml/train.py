@@ -11,7 +11,6 @@ from .predict import ImageClassificationPredictor
 from .predict import SemanticSegmentationPredictor
 
 from deepml import utils
-from deepml.transforms import ImageNetInverseTransform
 
 
 class Learner:
@@ -116,6 +115,7 @@ class Learner:
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
             save_model_after_every_epoch=5, lr_scheduler=None,
             image_inverse_transform=None, show_progress=True, classes:list=None):
+
         """
         Starts training the model on specified train loader
 
@@ -139,6 +139,7 @@ class Learner:
         :param lr_scheduler: the learning rate scheduler, default is None.
 
         :param image_inverse_transform: It denotes reverse transformations of image normalization so that images
+
         can be displayed on tensor board. Default is deepml.transforms.ImageNetInverseTransform() which is
         an inverse of ImageNet normalization.
 
@@ -200,6 +201,7 @@ class Learner:
                 if show_progress:
                     bar.update(1)
                     bar.set_postfix({'Train loss': '{:.6f}'.format(running_train_loss)})
+
 
                 if step % steps_per_epoch == 0 and image_inverse_transform is not None:
                     self.writer.add_images('Images/Train/Input/', image_inverse_transform(X), epoch + 1)
