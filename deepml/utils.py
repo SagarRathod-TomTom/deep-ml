@@ -89,3 +89,13 @@ def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10)):
     image_generator = ((Image.open(os.path.join(img_dir, files[index])), files[index])
                        for index in samples)
     plot_images(image_generator, len(samples), cols=cols, figsize=figsize)
+
+
+def get_random_samples_batch_from_loader(loader):
+    indexes = np.random.randint(0, len(loader.dataset), loader.batch_size)
+    samples, targets = [], []
+    for index in indexes:
+        x, y = loader.dataset[index]
+        samples.append(x)
+        targets.append(y)
+    return torch.stack(samples), torch.stack(targets)

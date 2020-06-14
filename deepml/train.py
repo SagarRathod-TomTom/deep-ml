@@ -242,7 +242,7 @@ class Learner:
                 if image_inverse_transform is not None:
                     self.__model.eval()
                     with torch.no_grad():
-                        X, y = next(iter(val_loader))
+                        X, y = utils.get_random_samples_batch_from_loader(val_loader)
                         X, y = X.to(self.device), y.to(self.device)
                         outputs = self.__model(X)
                         self.writer.add_images('Images/Val/Input/', image_inverse_transform(X), epoch + 1)
