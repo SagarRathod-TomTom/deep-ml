@@ -54,9 +54,8 @@ class ImageInverseTransform:
 
     def __call__(self, image_batch):
 
-        if str(image_batch.device) != "cpu":
-            self.mean = self.mean.cuda()
-            self.std = self.std.cuda()
+        self.mean = self.mean.to(image_batch.device)
+        self.std = self.std.to(image_batch.device)
 
         return image_batch * self.std[:, None, None] + self.mean[:, None, None]
 

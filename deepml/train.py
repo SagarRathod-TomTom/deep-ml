@@ -229,6 +229,7 @@ class Learner:
                     break
 
             stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, running_train_loss)
+            self.epochs_completed = self.epochs_completed + 1
             self.writer.add_scalar('Loss/Train', running_train_loss, epoch + 1)
 
             val_loss = np.inf
