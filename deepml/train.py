@@ -16,7 +16,7 @@ from deepml import utils
 class Learner:
 
     def __init__(self, model, optimizer, model_save_path, model_file_name='latest_model.pt',
-                 load_saved_model=False, load_optimizer_state=False, use_gpu=False):
+                 load_saved_model=False, load_optimizer_state=False, use_gpu=False, classes=None):
         self.__model = model
         self.__optimizer = optimizer
         self.model_save_path = model_save_path
@@ -28,11 +28,12 @@ class Learner:
                                                  utils.find_new_run_dir_name(self.model_save_path)))
         self.device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
 
+        self.__predictor = None
+        self.__classes = classes
+
         if load_saved_model and model_file_name is not None:
             self.load_saved_model(os.path.join(self.model_save_path, model_file_name),
                                   load_optimizer_state)
-
-        self.predictor = None
 
     def load_saved_model(self, model_path, load_optimizer_state=False):
         if os.path.exists(model_path):
@@ -49,6 +50,14 @@ class Learner:
 
             if 'metrics' in state_dict and 'val_loss' in state_dict['metrics']:
                 self.best_val_loss = state_dict['metrics']['val_loss']
+
+            if 'classes' in state_dict:
+                self.__classes = state_dict['classes']
+
+            if 'predictor' in state_dict:
+                # instantiate predictor class
+                self.__predictor = state_dict['predictor'](model=self.__model, classes=self.__classes)
+
         else:
             print(f'{model_path} does not exist.')
 
@@ -67,8 +76,17 @@ class Learner:
         if type(train_loss) == float and type(val_loss) == float:
             save_dict['metrics'] = {'train_loss': train_loss, 'val_loss': val_loss}
 
-        torch.save(save_dict, os.path.join(self.model_save_path, model_file_name))
+        if self.__predictor is not None:
+            save_dict['predictor'] = self.__predictor.__class__
+
+        if self.__classes is not None:
+            save_dict['classes'] = self.__classes
+
+        filepath = os.path.join(self.model_save_path, model_file_name)
+        torch.save(save_dict, filepath)
         self.__model.to(self.device)
+
+        return filepath
 
     def validate(self, criterion, loader, show_progress=True):
         if loader is None:
@@ -94,13 +112,13 @@ class Learner:
 
         return running_loss
 
-    def __infer_predictor(self, x, classes):
+    def __infer_predictor(self, x):
 
         self.__model.eval()
         with torch.no_grad():
             prediction = self.__model(x.to(self.device)).cpu()
 
-            if classes and len(classes) > 1:
+            if self.__classes is None:
                 try:
                     prediction = prediction.item()
                     return ImageRegressionPredictor(self.__model)
@@ -108,13 +126,13 @@ class Learner:
                     pass
 
             if prediction.ndim == 2:
-                return ImageClassificationPredictor(self.__model, classes=classes)
+                return ImageClassificationPredictor(self.__model, classes=self.__classes)
             else:
-                return SemanticSegmentationPredictor(self.__model, classes=classes)
+                return SemanticSegmentationPredictor(self.__model, classes=self.__classes)
 
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
             save_model_after_every_epoch=5, lr_scheduler=None,
-            image_inverse_transform=None, show_progress=True, classes:list=None):
+            image_inverse_transform=None, show_progress=True):
 
         """
         Starts training the model on specified train loader
@@ -145,7 +163,6 @@ class Learner:
 
         :param show_progress: Show progress during training and validation. Default is True
 
-        :param classes: the list of target class names.
         """
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
@@ -153,11 +170,11 @@ class Learner:
         self.__model = self.__model.to(self.device)
         criterion = criterion.to(self.device)
 
-        if self.predictor is None:
+        if self.__predictor is None:
             x, _ = train_loader.dataset[0]
             # Add batch dimension
             x = x.unsqueeze(dim=0)
-            self.predictor = self.__infer_predictor(x, classes)
+            self.__predictor = self.__infer_predictor(x)
 
         # Write graph to tensorboard
         if torch.cuda.is_available():
@@ -203,7 +220,6 @@ class Learner:
                 if show_progress:
                     bar.update(1)
                     bar.set_postfix({'Train loss': '{:.6f}'.format(running_train_loss)})
-
 
                 if step % steps_per_epoch == 0 and image_inverse_transform is not None:
                     self.writer.add_images('Images/Train/Input/', image_inverse_transform(X), epoch + 1)
@@ -264,7 +280,7 @@ class Learner:
                   val_loss=self.best_val_loss)
 
     def predict(self, loader):
-        predictions, targets = self.predictor.predict(loader, use_gpu=str(self.device) == "cuda:0")
+        predictions, targets = self.__predictor.predict(loader, use_gpu=str(self.device) == "cuda:0")
         return predictions, targets
 
     def extract_features(self, loader, no_of_features, features_csv_file, iterations=1,
@@ -298,20 +314,7 @@ class Learner:
                     fp.flush()
         fp.close()
 
-    def show_predictions(self, loader, image_inverse_transform=None, samples=10, cols=4, figsize=(10,10)):
+    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10,10)):
 
-        self.__model = self.__model.to(self.device)
-        self.__model.eval()
-
-        with torch.no_grad():
-            indexes = np.random.randint(0, len(loader.dataset), samples)
-
-            def transform(input_batch):
-                x, y = input_batch
-                prediction = self.__model(x.unsqueeze(dim=0).to(self.device)).cpu()
-                return (self.predictor.transform_input(x, image_inverse_transform),
-                        f'Ground Truth={self.predictor.transform_target(y)} '
-                        f'\nPrediction={self.predictor.transform_output(prediction)}')
-
-            image_title_generator = (transform(loader.dataset[index]) for index in indexes)
-            utils.plot_images(image_title_generator, samples=samples, cols=cols, figsize=figsize)
+        self.__predictor.show_predictions(loader, image_inverse_transform=image_inverse_transform,
+                                          samples=samples, cols=cols, figsize=figsize)
