@@ -17,6 +17,13 @@ class Learner:
 
     def __init__(self, model, optimizer, model_save_path, model_file_name='latest_model.pt',
                  load_saved_model=False, load_optimizer_state=True, use_gpu=False, classes=None):
+
+        if model is None:
+            raise ValueError('Model cannot be None.')
+
+        if optimizer is None:
+            raise ValueError('Optimizer cannot be None.')
+
         self.__model = model
         self.__optimizer = optimizer
         self.model_save_path = model_save_path
@@ -35,9 +42,15 @@ class Learner:
             self.load_saved_model(os.path.join(self.model_save_path, model_file_name),
                                   load_optimizer_state)
 
+        self.set_optimizer(self.__optimizer)
+
+    def set_optimizer(self, optimizer):
+        if optimizer is None:
+            raise ValueError('Optimizer cannot be None.')
+
         self.__model = self.__model.to(self.device)
-        self.__optimizer = self.__optimizer.__class__(self.__model.parameters(),
-                                                      **self.__optimizer.defaults)
+        self.__optimizer = optimizer.__class__(self.__model.parameters(),
+                                               **optimizer.defaults)
 
     def load_saved_model(self, model_path, load_optimizer_state=False):
         if os.path.exists(model_path):
