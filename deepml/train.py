@@ -16,13 +16,13 @@ from deepml import utils
 class Learner:
 
     def __init__(self, model, optimizer, model_save_path, model_file_name='latest_model.pt',
-                 load_saved_model=False, load_optimizer_state=False, use_gpu=False, classes=None):
+                 load_saved_model=False, load_optimizer_state=True, use_gpu=False, classes=None):
         self.__model = model
         self.__optimizer = optimizer
         self.model_save_path = model_save_path
         self.epochs_completed = 0
         self.best_val_loss = np.inf
-        self.lr_rates = {}
+
         os.makedirs(self.model_save_path, exist_ok=True)
         self.writer = SummaryWriter(os.path.join(self.model_save_path,
                                                  utils.find_new_run_dir_name(self.model_save_path)))
@@ -35,15 +35,22 @@ class Learner:
             self.load_saved_model(os.path.join(self.model_save_path, model_file_name),
                                   load_optimizer_state)
 
+        self.__model = self.__model.to(self.device)
+        self.__optimizer = self.__optimizer.__class__(self.__model.parameters(),
+                                                      **self.__optimizer.defaults)
+
     def load_saved_model(self, model_path, load_optimizer_state=False):
         if os.path.exists(model_path):
             print('Loading Saved Model Weights.')
             state_dict = torch.load(model_path)
             self.__model.load_state_dict(state_dict['model'])
 
-            if load_optimizer_state and 'optimizer' in state_dict and state_dict['optimizer'] == \
-                    self.__optimizer.__class__.__name__:
-                self.__optimizer.load_state_dict(state_dict['optimizer_state'])
+            if load_optimizer_state and 'optimizer' in state_dict:
+                if state_dict['optimizer'] == self.__optimizer.__class__.__name__:
+                    self.__optimizer.load_state_dict(state_dict['optimizer_state'])
+                else:
+                    print(f"Skipping load optimizer state because {self.__optimizer.__class__.__name__}"
+                          f" != {state_dict['optimizer']}")
 
             if 'epoch' in state_dict:
                 self.epochs_completed = state_dict['epoch']
