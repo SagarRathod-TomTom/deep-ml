@@ -183,7 +183,7 @@ class ImageClassificationPredictor(ImageRegressionPredictor):
 
                 return (self.transform_input(x, image_inverse_transform),
                         f'Ground Truth={self.transform_target(y)} '
-                        f'\nPrediction={(predicted_class, round(probability, 2))}')
+                        f'\nPrediction={(predicted_class, round(probability.item(), 2))}')
 
             image_title_generator = (transform(loader.dataset[index]) for index in indexes)
             plot_images(image_title_generator, samples=samples, cols=cols, figsize=figsize)

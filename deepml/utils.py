@@ -45,10 +45,10 @@ def plot_images(image_title_generator, samples, cols=4, figsize=(10, 10)):
 
 def transform_target(target, classes=None):
     if target is not None:
-        target = target.item()
-        if type(target) == float:
+        target = target.item() if type(target) == torch.Tensor else target
+        if type(target) == float and classes is None:
             target = round(target, 2)
-        elif type(classes) == list and classes:
+        elif type(classes) in (list, tuple) and classes:
             # if classes is not empty, replace target with actual class label
             target = classes[target]
     return target
@@ -60,18 +60,7 @@ def transform_input(X, image_inverse_transform=None):
     return X.numpy().transpose(1, 2, 0)  # CWH -> WHC
 
 
-def transform_output(output, classes=None):
-    if output is not None:
-        if output.ndim == 1:
-            output = output.item()
-        elif output.ndim == 2 and classes and output.shape[1] == len(classes):
-            # multiclass
-            probability, index = torch.max(output, dim=1)
-            output = probability, classes[index]
-    return output
-
-
-def show_images_from_loader(loader, samples=9, cols=3, figsize=(5, 5), image_inverse_transform=None,
+def show_images_from_loader(loader, image_inverse_transform=None, samples=9, cols=3, figsize=(5, 5),
                             classes=None):
     indexes = np.random.randint(0, len(loader.dataset), samples)
 
