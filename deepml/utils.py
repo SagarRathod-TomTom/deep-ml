@@ -3,6 +3,7 @@ import glob
 
 import torch
 from matplotlib import pyplot as plt
+from PIL import Image
 import numpy as np
 from deepml.constants import RUN_DIR_NAME
 from datetime import datetime
@@ -10,7 +11,7 @@ from datetime import datetime
 
 def get_datetime():
     date, timestamp = str(datetime.now()).split(' ')
-    return '-'.join((date.replace('-','_'), timestamp.replace(':', '_').split('.')[0]))
+    return '-'.join((date.replace('-', '_'), timestamp.replace(':', '_').split('.')[0]))
 
 
 def find_new_run_dir_name(target_dir):
@@ -31,34 +32,59 @@ def binarize(output: torch.FloatTensor, threshold: float = 0.50):
     return output.to(torch.uint8)
 
 
-def show_batch(loader, cols=4, figsize=(5, 5)):
-    samples = np.random.randint(0, len(loader.dataset), loader.batch_size)
+def plot_images(image_title_generator, samples, cols=4, figsize=(10, 10)):
     plt.figure(figsize=figsize)
-    rows = int(np.ceil(loader.batch_size / cols))
-    for index, sample_index in enumerate(samples):
-        X, y = loader.dataset[sample_index]
-        X = X.numpy().transpose(1, 2, 0) # CWH -> WHC
-        plt.subplot(rows, cols, index + 1)
-        plt.imshow(X)
-        if y is not None:
-            target = y.item()
-            title = round(target, 2) if type(target) == float else target
-            plt.title(title)
-        plt.xticks([])
-        plt.yticks([])
-
-
-def plot_image_batch(img_batch: torch.Tensor, targets=None, cols=4, figsize=(5, 5)):
-    img_batch = img_batch.numpy().transpose((0, 2, 3, 1)) # BCWH --> BWHC
-    plt.figure(figsize=figsize)
-    samples = len(img_batch)
     rows = int(np.ceil(samples / cols))
-    for index in range(samples):
+    for index, (image, title) in enumerate(image_title_generator):
         plt.subplot(rows, cols, index + 1)
-        plt.imshow(img_batch[index])
-        if targets is not None:
-            target = targets[index].item()
-            title = round(target, 2) if type(target) == float else target
-            plt.title(title)
+        plt.imshow(image)
+        plt.title(title)
         plt.xticks([])
         plt.yticks([])
+
+
+def transform_target(target, classes=None):
+    if target is not None:
+        target = target.item() if type(target) == torch.Tensor else target
+        if type(target) == float and classes is None:
+            target = round(target, 2)
+        elif type(classes) in (list, tuple) and classes:
+            # if classes is not empty, replace target with actual class label
+            target = classes[target]
+    return target
+
+
+def transform_input(X, image_inverse_transform=None):
+    if image_inverse_transform is not None:
+        X = image_inverse_transform(X.unsqueeze(dim=0)).squeeze()
+    return X.numpy().transpose(1, 2, 0)  # CWH -> WHC
+
+
+def show_images_from_loader(loader, image_inverse_transform=None, samples=9, cols=3, figsize=(5, 5),
+                            classes=None):
+    indexes = np.random.randint(0, len(loader.dataset), samples)
+
+    def transform(input_batch):
+        x, y = input_batch
+        return transform_input(x, image_inverse_transform), transform_target(y, classes)
+
+    image_title_generator = (transform(loader.dataset[index]) for index in indexes)
+    plot_images(image_title_generator, samples=samples, cols=cols, figsize=figsize)
+
+
+def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10)):
+    files = os.listdir(img_dir)
+    samples = np.random.randint(0, len(img_dir), size=samples)
+    image_generator = ((Image.open(os.path.join(img_dir, files[index])), files[index])
+                       for index in samples)
+    plot_images(image_generator, len(samples), cols=cols, figsize=figsize)
+
+
+def get_random_samples_batch_from_loader(loader):
+    indexes = np.random.randint(0, len(loader.dataset), loader.batch_size)
+    samples, targets = [], []
+    for index in indexes:
+        x, y = loader.dataset[index]
+        samples.append(x)
+        targets.append(y)
+    return torch.stack(samples), torch.stack(targets)

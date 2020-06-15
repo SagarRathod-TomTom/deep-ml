@@ -6,14 +6,17 @@ import torch
 from tqdm.auto import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
+from .predict import ImageRegressionPredictor
+from .predict import ImageClassificationPredictor
+from .predict import SemanticSegmentationPredictor
+
 from deepml import utils
-from deepml.transforms import ImageNetInverseTransform
 
 
 class Learner:
 
     def __init__(self, model, optimizer, model_save_path, model_file_name='latest_model.pt',
-                 load_saved_model=False, load_optimizer_state=False, use_gpu=False):
+                 load_saved_model=False, load_optimizer_state=False, use_gpu=False, classes=None):
         self.__model = model
         self.__optimizer = optimizer
         self.model_save_path = model_save_path
@@ -24,6 +27,9 @@ class Learner:
         self.writer = SummaryWriter(os.path.join(self.model_save_path,
                                                  utils.find_new_run_dir_name(self.model_save_path)))
         self.device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
+
+        self.__predictor = None
+        self.__classes = classes
 
         if load_saved_model and model_file_name is not None:
             self.load_saved_model(os.path.join(self.model_save_path, model_file_name),
@@ -44,6 +50,14 @@ class Learner:
 
             if 'metrics' in state_dict and 'val_loss' in state_dict['metrics']:
                 self.best_val_loss = state_dict['metrics']['val_loss']
+
+            if 'classes' in state_dict:
+                self.__classes = state_dict['classes']
+
+            if 'predictor' in state_dict:
+                # instantiate predictor class
+                self.__predictor = state_dict['predictor'](model=self.__model, classes=self.__classes)
+
         else:
             print(f'{model_path} does not exist.')
 
@@ -62,8 +76,17 @@ class Learner:
         if type(train_loss) == float and type(val_loss) == float:
             save_dict['metrics'] = {'train_loss': train_loss, 'val_loss': val_loss}
 
-        torch.save(save_dict, os.path.join(self.model_save_path, model_file_name))
+        if self.__predictor is not None:
+            save_dict['predictor'] = self.__predictor.__class__
+
+        if self.__classes is not None:
+            save_dict['classes'] = self.__classes
+
+        filepath = os.path.join(self.model_save_path, model_file_name)
+        torch.save(save_dict, filepath)
         self.__model.to(self.device)
+
+        return filepath
 
     def validate(self, criterion, loader, show_progress=True):
         if loader is None:
@@ -89,42 +112,69 @@ class Learner:
 
         return running_loss
 
+    def __infer_predictor(self, x):
+
+        self.__model.eval()
+        with torch.no_grad():
+            prediction = self.__model(x.to(self.device)).cpu()
+
+            if self.__classes is None:
+                try:
+                    prediction = prediction.item()
+                    return ImageRegressionPredictor(self.__model)
+                except ValueError:
+                    pass
+
+            if prediction.ndim == 2:
+                return ImageClassificationPredictor(self.__model, classes=self.__classes)
+            else:
+                return SemanticSegmentationPredictor(self.__model, classes=self.__classes)
+
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
             save_model_after_every_epoch=5, lr_scheduler=None,
-            viz_inverse_transform=ImageNetInverseTransform(), show_progress=True):
+            image_inverse_transform=None, show_progress=True):
+
         """
         Starts training the model on specified train loader
 
         Parameters
         ----------
-        criterion: loss function to optimize
+        :param criterion: loss function to optimize
 
-        train_loader: The torch.utils.data.DataLoader for model to train on.
+        :param train_loader: The torch.utils.data.DataLoader for model to train on.
 
-        val_loader: The torch.utils.data.DataLoader for model to validate on.
+        :param val_loader: The torch.utils.data.DataLoader for model to validate on.
         Default is None.
 
-        epochs: int The number of epochs to train. Default is 10
+        :param epochs: int The number of epochs to train. Default is 10
 
-        steps_per_epoch: Should be around len(train_loader),
+        :param steps_per_epoch: Should be around len(train_loader),
         so that every example in the dataset gets covered in each epoch.
 
-        save_model_after_every_epoch: To save the model after every number of completed epochs
+        :param save_model_after_every_epoch: To save the model after every number of completed epochs
         Default is 5.
 
-        lr_scheduler: the learning rate scheduler, default is None.
+        :param lr_scheduler: the learning rate scheduler, default is None.
 
-        viz_inverse_transform: It denotes reverse transformations of image normalization so that images
+        :param image_inverse_transform: It denotes reverse transformations of image normalization so that images
+
         can be displayed on tensor board. Default is deepml.transforms.ImageNetInverseTransform() which is
         an inverse of ImageNet normalization.
 
-        show_progress: Show progress during training and validation. Default is True
+        :param show_progress: Show progress during training and validation. Default is True
+
         """
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
 
         self.__model = self.__model.to(self.device)
         criterion = criterion.to(self.device)
+
+        if self.__predictor is None:
+            x, _ = train_loader.dataset[0]
+            # Add batch dimension
+            x = x.unsqueeze(dim=0)
+            self.__predictor = self.__infer_predictor(x)
 
         # Write graph to tensorboard
         if torch.cuda.is_available():
@@ -171,14 +221,15 @@ class Learner:
                     bar.update(1)
                     bar.set_postfix({'Train loss': '{:.6f}'.format(running_train_loss)})
 
-                if step % steps_per_epoch == 0:
-                    self.writer.add_images('Images/Train/Input/', viz_inverse_transform(X), epoch + 1)
+                if step % steps_per_epoch == 0 and image_inverse_transform is not None:
+                    self.writer.add_images('Images/Train/Input/', image_inverse_transform(X), epoch + 1)
                     if y.ndim > 1:
                         self.writer.add_images('Images/Train/Target', y, epoch + 1)
                         self.writer.add_images('Images/Train/Output', utils.binarize(outputs), epoch + 1)
                     break
 
             stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, running_train_loss)
+            self.epochs_completed = self.epochs_completed + 1
             self.writer.add_scalar('Loss/Train', running_train_loss, epoch + 1)
 
             val_loss = np.inf
@@ -188,14 +239,14 @@ class Learner:
                 self.writer.add_scalar('Loss/Val', val_loss, epoch + 1)
 
                 # Log lass batch of val images to viz
-                if viz_inverse_transform is not None and torch.cuda.is_available():
+                if image_inverse_transform is not None:
                     self.__model.eval()
                     with torch.no_grad():
-                        X, y = next(iter(val_loader))
-                        X, y = X.cuda(), y.cuda()
+                        X, y = utils.get_random_samples_batch_from_loader(val_loader)
+                        X, y = X.to(self.device), y.to(self.device)
                         outputs = self.__model(X)
+                        self.writer.add_images('Images/Val/Input/', image_inverse_transform(X), epoch + 1)
                         if y.ndim > 1:
-                            self.writer.add_images('Images/Val/Input/', viz_inverse_transform(X), epoch + 1)
                             self.writer.add_images('Images/Val/Target', y)
                             self.writer.add_images('Images/Val/Output', utils.binarize(outputs), epoch + 1)
 
@@ -230,19 +281,7 @@ class Learner:
                   val_loss=self.best_val_loss)
 
     def predict(self, loader):
-        self.__model.eval()
-        predictions = []
-        targets = []
-        with torch.no_grad():
-            for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
-                X = X.to(self.device)
-                pred = self.__model(X).cpu()
-                predictions.append(pred)
-                targets.append(y)
-
-        predictions = torch.cat(predictions)
-        targets = torch.cat(targets) if type(targets[0]) == torch.Tensor else np.hstack(targets).tolist()
-
+        predictions, targets = self.__predictor.predict(loader, use_gpu=str(self.device) == "cuda:0")
         return predictions, targets
 
     def extract_features(self, loader, no_of_features, features_csv_file, iterations=1,
@@ -275,3 +314,8 @@ class Learner:
                     csv_writer.writerows(feature_set)
                     fp.flush()
         fp.close()
+
+    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10,10)):
+
+        self.__predictor.show_predictions(loader, image_inverse_transform=image_inverse_transform,
+                                          samples=samples, cols=cols, figsize=figsize)
