@@ -1,5 +1,6 @@
 import os
 import csv
+from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -37,6 +38,7 @@ class Learner:
 
         self.__predictor = None
         self.__classes = classes
+        self.metrics_dict = OrderedDict({'loss': 0})
 
         if load_saved_model and model_file_name is not None:
             self.load_saved_model(os.path.join(self.model_save_path, model_file_name),
@@ -108,12 +110,13 @@ class Learner:
 
         return filepath
 
-    def validate(self, criterion, loader, show_progress=True):
+    def validate(self, criterion, loader, metrics=None, show_progress=True):
         if loader is None:
             raise Exception('Loader cannot be None.')
 
         self.__model.eval()
-        running_loss = 0
+        self.metrics_dict['loss'] = 0
+        self.__init_metrics(metrics)
 
         if show_progress:
             bar = tqdm(total=len(loader), desc="{:12s}".format('Validation'))
@@ -124,13 +127,15 @@ class Learner:
                 y = y.to(self.device)
                 output = self.__model(X)
                 loss = criterion(output, y)
-                running_loss = running_loss + ((loss.item() - running_loss) / (batch_index + 1))
+                self.metrics_dict['loss'] = self.metrics_dict['loss'] + ((loss.item() - self.metrics_dict['loss'])
+                                                                         / (batch_index + 1))
 
+                self.__update_metrics(output, y, metrics, batch_index + 1)
                 if show_progress:
                     bar.update(1)
-                    bar.set_postfix({'Val Loss': '{:.6f}'.format(running_loss)})
+                    bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.metrics_dict.items()})
 
-        return running_loss
+        return self.metrics_dict
 
     def __infer_predictor(self, x):
 
@@ -150,9 +155,26 @@ class Learner:
             else:
                 return SemanticSegmentationPredictor(self.__model, classes=self.__classes)
 
+    def __init_metrics(self, metrics):
+        for metric in metrics:
+            self.metrics_dict[metric.__class__.__name] = 0
+
+    def __update_metrics(self, outputs, targets, metrics, step):
+        # Update metrics
+        outputs = outputs.to(self.device)
+        targets = targets.to(self.device)
+        for metric_obj in metrics:
+            name = metric_obj.__class__.__name__
+            self.metrics_dict[name] = self.metrics_dict[name] + \
+                                      ((metric_obj(outputs, targets) - self.metrics_dict[name]) / step)
+
+    def __write_metrics_to_tensorboard(self, tag, global_step):
+        for name, value in self.metrics_dict:
+            self.writer.add_scalar(f'{tag}/{name}', value, global_step)
+
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
-            save_model_after_every_epoch=5, lr_scheduler=None,
-            image_inverse_transform=None, show_progress=True):
+            save_model_after_every_epoch=5, lr_scheduler=None, image_inverse_transform=None,
+            show_progress=True, metrics=None):
 
         """
         Starts training the model on specified train loader
@@ -183,6 +205,9 @@ class Learner:
 
         :param show_progress: Show progress during training and validation. Default is True
 
+        :param metrics: list of metrics to monitor. Must be subclass of torch.nn.Module and implements
+                        forward function
+
         """
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
@@ -200,6 +225,13 @@ class Learner:
         if torch.cuda.is_available():
             self.writer.add_graph(self.__model, next(iter(train_loader))[0].cuda())
 
+        # Check valid metrics types
+        for metric in metrics:
+            if not (isinstance(metric, torch.nn.Module) and hasattr(metric, 'forward')):
+                raise TypeError(f'{metric.__class__} is not supported')
+
+        train_loss = 0
+        epoch = 0
         epochs = self.epochs_completed + epochs
         for epoch in range(self.epochs_completed, epochs):
 
@@ -211,7 +243,10 @@ class Learner:
             # Iterate over batches
             step = 0
             lr_step_done = False
-            running_train_loss = 0
+
+            # init all metrics with zeros
+            self.metrics_dict['loss'] = 0
+            self.__init_metrics(metrics)
 
             if show_progress:
                 bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
@@ -235,11 +270,14 @@ class Learner:
                     lr_step_done = True
 
                 step = step + 1
-                running_train_loss = running_train_loss + ((loss.item() - running_train_loss) / step)
+                self.metrics_dict['loss'] = self.metrics_dict['loss'] + ((loss.item() - self.metrics_dict['loss'])
+                                                                         / step)
+                # Update metrics
+                self.__update_metrics(outputs, y, metrics, step)
 
                 if show_progress:
                     bar.update(1)
-                    bar.set_postfix({'Train loss': '{:.6f}'.format(running_train_loss)})
+                    bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.metrics_dict.items()})
 
                 if step % steps_per_epoch == 0 and image_inverse_transform is not None:
                     self.writer.add_images('Images/Train/Input/', image_inverse_transform(X), epoch + 1)
@@ -248,15 +286,18 @@ class Learner:
                         self.writer.add_images('Images/Train/Output', utils.binarize(outputs), epoch + 1)
                     break
 
-            stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, running_train_loss)
+            train_loss = self.metrics_dict['loss']
+            stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, self.metrics_dict['loss'])
             self.epochs_completed = self.epochs_completed + 1
-            self.writer.add_scalar('Loss/Train', running_train_loss, epoch + 1)
+
+            self.__write_metrics_to_tensorboard('Train', epoch + 1)
 
             val_loss = np.inf
             if val_loader is not None:
-                val_loss = self.validate(criterion, val_loader, show_progress)
-                stats_info = stats_info + "\tVal Loss: {:.6f}".format(val_loss)
-                self.writer.add_scalar('Loss/Val', val_loss, epoch + 1)
+                self.validate(criterion, val_loader, metrics, show_progress)
+                val_loss = self.metrics_dict['loss']
+                stats_info = stats_info + "\tVal Loss: {:.6f}".format(self.metrics_dict['loss'])
+                self.__write_metrics_to_tensorboard('Val', epochs + 1)
 
                 # Log lass batch of val images to viz
                 if image_inverse_transform is not None:
@@ -281,7 +322,7 @@ class Learner:
                     self.save('best_val_model.pt',
                               save_optimizer_state=True,
                               epoch=epoch,
-                              train_loss=running_train_loss,
+                              train_loss=train_loss,
                               val_loss=val_loss)
 
             if lr_scheduler is not None and not lr_step_done:
@@ -294,10 +335,10 @@ class Learner:
             if epoch % save_model_after_every_epoch == 0:
                 model_file_name = "model_epoch_{}.pt".format(epoch)
                 self.save(model_file_name, save_optimizer_state=True, epoch=epoch,
-                          train_loss=running_train_loss, val_loss=val_loss)
+                          train_loss=train_loss, val_loss=val_loss)
 
         # Save latest model at the end
-        self.save("latest_model.pt", save_optimizer_state=True, epoch=epoch, train_loss=running_train_loss,
+        self.save("latest_model.pt", save_optimizer_state=True, epoch=epoch, train_loss=train_loss,
                   val_loss=self.best_val_loss)
 
     def predict(self, loader):
@@ -328,14 +369,15 @@ class Learner:
                     feature_set = self.__model(X).cpu().numpy()
 
                     if target_known:
-                        y = y.numpy().reshape(-1,1)
+                        y = y.numpy().reshape(-1, 1)
                         feature_set = np.hstack([y, feature_set])
 
                     csv_writer.writerows(feature_set)
                     fp.flush()
         fp.close()
 
-    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10,10)):
+    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
 
         self.__predictor.show_predictions(loader, image_inverse_transform=image_inverse_transform,
                                           samples=samples, cols=cols, figsize=figsize)
+
