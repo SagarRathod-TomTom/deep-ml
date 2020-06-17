@@ -126,7 +126,9 @@ class Learner:
                 X = X.to(self.device)
                 y = y.to(self.device)
                 output = self.__model(X)
+                y = y.view_as(output)
                 loss = criterion(output, y)
+
                 self.metrics_dict['loss'] = self.metrics_dict['loss'] + ((loss.item() - self.metrics_dict['loss'])
                                                                          / (batch_index + 1))
 
@@ -157,19 +159,20 @@ class Learner:
 
     def __init_metrics(self, metrics):
         for metric in metrics:
-            self.metrics_dict[metric.__class__.__name] = 0
+            self.metrics_dict[metric.__class__.__name__] = 0
 
     def __update_metrics(self, outputs, targets, metrics, step):
         # Update metrics
         outputs = outputs.to(self.device)
         targets = targets.to(self.device)
+
         for metric_obj in metrics:
             name = metric_obj.__class__.__name__
             self.metrics_dict[name] = self.metrics_dict[name] + \
-                                      ((metric_obj(outputs, targets) - self.metrics_dict[name]) / step)
+                                      ((metric_obj(outputs, targets).item() - self.metrics_dict[name]) / step)
 
     def __write_metrics_to_tensorboard(self, tag, global_step):
-        for name, value in self.metrics_dict:
+        for name, value in self.metrics_dict.items():
             self.writer.add_scalar(f'{tag}/{name}', value, global_step)
 
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
@@ -261,8 +264,10 @@ class Learner:
                 self.__optimizer.zero_grad()
 
                 outputs = self.__model(X)
+                y = y.view_as(outputs)
                 loss = criterion(outputs, y)
                 loss.backward()
+
                 self.__optimizer.step()
 
                 if isinstance(lr_scheduler, torch.optim.lr_scheduler.CyclicLR):
@@ -281,7 +286,7 @@ class Learner:
 
                 if step % steps_per_epoch == 0 and image_inverse_transform is not None:
                     self.writer.add_images('Images/Train/Input/', image_inverse_transform(X), epoch + 1)
-                    if y.ndim > 1:
+                    if y.ndim > 2:
                         self.writer.add_images('Images/Train/Target', y, epoch + 1)
                         self.writer.add_images('Images/Train/Output', utils.binarize(outputs), epoch + 1)
                     break
@@ -307,7 +312,7 @@ class Learner:
                         X, y = X.to(self.device), y.to(self.device)
                         outputs = self.__model(X)
                         self.writer.add_images('Images/Val/Input/', image_inverse_transform(X), epoch + 1)
-                        if y.ndim > 1:
+                        if y.ndim > 2:
                             self.writer.add_images('Images/Val/Target', y)
                             self.writer.add_images('Images/Val/Output', utils.binarize(outputs), epoch + 1)
 
