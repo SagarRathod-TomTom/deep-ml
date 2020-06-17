@@ -38,7 +38,7 @@ class Learner:
 
         self.__predictor = None
         self.__classes = classes
-        self.metrics_dict = OrderedDict({'loss': 0})
+        self.__metrics_dict = OrderedDict({'loss': 0})
 
         if load_saved_model and model_file_name is not None:
             self.load_saved_model(os.path.join(self.model_save_path, model_file_name),
@@ -115,7 +115,7 @@ class Learner:
             raise Exception('Loader cannot be None.')
 
         self.__model.eval()
-        self.metrics_dict['loss'] = 0
+        self.__metrics_dict['loss'] = 0
         self.__init_metrics(metrics)
 
         if show_progress:
@@ -129,15 +129,15 @@ class Learner:
                 y = y.view_as(output)
                 loss = criterion(output, y)
 
-                self.metrics_dict['loss'] = self.metrics_dict['loss'] + ((loss.item() - self.metrics_dict['loss'])
-                                                                         / (batch_index + 1))
+                self.__metrics_dict['loss'] = self.__metrics_dict['loss'] + ((loss.item() - self.__metrics_dict['loss'])
+                                                                             / (batch_index + 1))
 
                 self.__update_metrics(output, y, metrics, batch_index + 1)
                 if show_progress:
                     bar.update(1)
-                    bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.metrics_dict.items()})
+                    bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
 
-        return self.metrics_dict
+        return self.__metrics_dict
 
     def __infer_predictor(self, x):
 
@@ -159,7 +159,7 @@ class Learner:
 
     def __init_metrics(self, metrics):
         for metric in metrics:
-            self.metrics_dict[metric.__class__.__name__] = 0
+            self.__metrics_dict[metric.__class__.__name__] = 0
 
     def __update_metrics(self, outputs, targets, metrics, step):
         # Update metrics
@@ -168,12 +168,17 @@ class Learner:
 
         for metric_obj in metrics:
             name = metric_obj.__class__.__name__
-            self.metrics_dict[name] = self.metrics_dict[name] + \
-                                      ((metric_obj(outputs, targets).item() - self.metrics_dict[name]) / step)
+            self.__metrics_dict[name] = self.__metrics_dict[name] + \
+                                        ((metric_obj(outputs, targets).item() - self.__metrics_dict[name]) / step)
 
     def __write_metrics_to_tensorboard(self, tag, global_step):
-        for name, value in self.metrics_dict.items():
+        for name, value in self.__metrics_dict.items():
             self.writer.add_scalar(f'{tag}/{name}', value, global_step)
+
+    def __write_lr_to_tensorboard(self, global_step):
+        # Write lr to tensor-board
+        param_group = self.__optimizer.param_groups[0]
+        self.writer.add_scalar('learning_rate', param_group['lr'], global_step)
 
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
             save_model_after_every_epoch=5, lr_scheduler=None, image_inverse_transform=None,
@@ -248,13 +253,16 @@ class Learner:
             lr_step_done = False
 
             # init all metrics with zeros
-            self.metrics_dict['loss'] = 0
+            self.__metrics_dict['loss'] = 0
             self.__init_metrics(metrics)
 
             if show_progress:
                 bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
             else:
                 print('Training...')
+
+            # Write current lr to tensor-board
+            self.__write_lr_to_tensorboard(epoch + 1)
 
             for batch_index, (X, y) in enumerate(train_loader):
                 X = X.to(self.device)
@@ -275,14 +283,14 @@ class Learner:
                     lr_step_done = True
 
                 step = step + 1
-                self.metrics_dict['loss'] = self.metrics_dict['loss'] + ((loss.item() - self.metrics_dict['loss'])
-                                                                         / step)
+                self.__metrics_dict['loss'] = self.__metrics_dict['loss'] + ((loss.item() - self.__metrics_dict['loss'])
+                                                                             / step)
                 # Update metrics
                 self.__update_metrics(outputs, y, metrics, step)
 
                 if show_progress:
                     bar.update(1)
-                    bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.metrics_dict.items()})
+                    bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
 
                 if step % steps_per_epoch == 0 and image_inverse_transform is not None:
                     self.writer.add_images('Images/Train/Input/', image_inverse_transform(X), epoch + 1)
@@ -291,8 +299,8 @@ class Learner:
                         self.writer.add_images('Images/Train/Output', utils.binarize(outputs), epoch + 1)
                     break
 
-            train_loss = self.metrics_dict['loss']
-            stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, self.metrics_dict['loss'])
+            train_loss = self.__metrics_dict['loss']
+            stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, self.__metrics_dict['loss'])
             self.epochs_completed = self.epochs_completed + 1
 
             self.__write_metrics_to_tensorboard('Train', epoch + 1)
@@ -300,9 +308,9 @@ class Learner:
             val_loss = np.inf
             if val_loader is not None:
                 self.validate(criterion, val_loader, metrics, show_progress)
-                val_loss = self.metrics_dict['loss']
-                stats_info = stats_info + "\tVal Loss: {:.6f}".format(self.metrics_dict['loss'])
-                self.__write_metrics_to_tensorboard('Val', epochs + 1)
+                val_loss = self.__metrics_dict['loss']
+                stats_info = stats_info + "\tVal Loss: {:.6f}".format(self.__metrics_dict['loss'])
+                self.__write_metrics_to_tensorboard('Val', epoch + 1)
 
                 # Log lass batch of val images to viz
                 if image_inverse_transform is not None:
