@@ -235,7 +235,7 @@ class ImageClassificationPredictor(ImageRegressionPredictor):
                 title_color = "green" if predicted_class == target_class else "red"
                 return (self.transform_input(x, image_inverse_transform),
                         f'Ground Truth={target_class}'
-                        f'\nPrediction={(predicted_class, round(probability.item(), 2))}', title_color)
+                        f'\nPrediction={predicted_class}, {probability}', title_color)
 
             image_title_generator = (transform(loader.dataset[index]) for index in indexes)
             plot_images(image_title_generator, samples=samples, cols=cols, figsize=figsize)
@@ -262,7 +262,7 @@ class ImageClassificationPredictor(ImageRegressionPredictor):
                                                               torchvision.transforms.Resize(img_size)])
             to_tensor = torchvision.transforms.ToTensor()
 
-            text = 'GT={ground_truth}\nPred={predicted_class},{probability}'
+            text = 'GT={ground_truth}\nPred={predicted_class}, {probability}'
             output_images = []
             for index in range(x.shape[0]):
                 ground_truth = self.transform_target(y[index])
