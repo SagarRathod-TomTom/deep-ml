@@ -2,11 +2,27 @@ import os
 import glob
 
 import torch
+import matplotlib as mpl
 from matplotlib import pyplot as plt
-from PIL import Image
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+
 from deepml.constants import RUN_DIR_NAME
 from datetime import datetime
+import pkg_resources
+
+font_resource = pkg_resources.resource_filename(__name__, "resources/fonts/OpenSans-Light.ttf")
+FONT = ImageFont.truetype(font_resource, 16)
+
+
+def create_text_image(text, img_size=(224, 224), text_color='black'):
+    image = Image.new('RGB', img_size, color=(255, 255, 255))
+    img_width, img_height = img_size
+    draw = ImageDraw.Draw(image)
+    text_width, text_height = draw.textsize(text, font=FONT)
+    draw.text(((img_width - text_width)/2, (img_height - text_height)/2), text, fill=text_color,
+              align='center', font=FONT)
+    return image
 
 
 def get_datetime():
@@ -32,15 +48,15 @@ def binarize(output: torch.FloatTensor, threshold: float = 0.50):
     return output.to(torch.uint8)
 
 
-def plot_images(image_title_generator, samples, cols=4, figsize=(10, 10)):
+def plot_images(image_title_generator, samples, cols=4, figsize=(10, 10), fontsize=14):
+
     plt.figure(figsize=figsize)
     rows = int(np.ceil(samples / cols))
-    for index, (image, title) in enumerate(image_title_generator):
-        plt.subplot(rows, cols, index + 1)
+    for index, (image, title, title_color) in enumerate(image_title_generator):
+        ax = plt.subplot(rows, cols, index + 1,  xticks=[], yticks=[])
+        ax.set_title(title, color=mpl.rcParams['text.color'] if title_color is None else title_color)
+        ax.title.set_fontsize(fontsize)
         plt.imshow(image)
-        plt.title(title)
-        plt.xticks([])
-        plt.yticks([])
 
 
 def transform_target(target, classes=None):
@@ -61,30 +77,36 @@ def transform_input(X, image_inverse_transform=None):
 
 
 def show_images_from_loader(loader, image_inverse_transform=None, samples=9, cols=3, figsize=(5, 5),
-                            classes=None):
+                            classes=None, title_color=None):
     indexes = np.random.randint(0, len(loader.dataset), samples)
 
     def transform(input_batch):
         x, y = input_batch
-        return transform_input(x, image_inverse_transform), transform_target(y, classes)
+        return transform_input(x, image_inverse_transform), transform_target(y, classes), title_color
 
     image_title_generator = (transform(loader.dataset[index]) for index in indexes)
     plot_images(image_title_generator, samples=samples, cols=cols, figsize=figsize)
 
 
-def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10)):
+def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10), title_color=None):
     files = os.listdir(img_dir)
     samples = np.random.randint(0, len(img_dir), size=samples)
-    image_generator = ((Image.open(os.path.join(img_dir, files[index])), files[index])
+
+    image_generator = ((Image.open(os.path.join(img_dir, files[index])), files[index], title_color)
                        for index in samples)
     plot_images(image_generator, len(samples), cols=cols, figsize=figsize)
 
 
 def get_random_samples_batch_from_loader(loader):
+
+    if len(loader) == 0:
+        raise ValueError('Loader is empty')
+
     indexes = np.random.randint(0, len(loader.dataset), loader.batch_size)
     samples, targets = [], []
     for index in indexes:
         x, y = loader.dataset[index]
         samples.append(x)
-        targets.append(y)
+        targets.append(y if isinstance(y, torch.Tensor) else torch.tensor(y))
+
     return torch.stack(samples), torch.stack(targets)
