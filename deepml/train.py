@@ -161,12 +161,14 @@ class Learner:
                 return SemanticSegmentationPredictor(self.__model, classes=self.__classes)
 
     def __init_metrics(self, metrics):
-
         if metrics is None:
             return
-
-        for metric in metrics:
-            self.__metrics_dict[metric.__class__.__name__] = 0
+        unique_metrics = set()
+        for metric_name, _ in metrics:
+            if metric_name in unique_metrics:
+                raise ValueError("Metrics names should be unique")
+            unique_metrics.add(metric_name)
+            self.__metrics_dict[metric_name] = 0
 
     def __update_metrics(self, outputs, targets, metrics, step):
 
@@ -177,10 +179,9 @@ class Learner:
         outputs = outputs.to(self.device)
         targets = targets.to(self.device)
 
-        for metric_obj in metrics:
-            name = metric_obj.__class__.__name__
-            self.__metrics_dict[name] = self.__metrics_dict[name] + \
-                                        ((metric_obj(outputs, targets).item() - self.__metrics_dict[name]) / step)
+        for metric_name, metric_instance in metrics:
+            self.__metrics_dict[metric_name] = self.__metrics_dict[metric_name] + \
+                                        ((metric_instance(outputs, targets).item() - self.__metrics_dict[metric_name]) / step)
 
     def __write_metrics_to_tensorboard(self, tag, global_step):
         for name, value in self.__metrics_dict.items():
@@ -224,8 +225,10 @@ class Learner:
 
         :param show_progress: Show progress during training and validation. Default is True
 
-        :param metrics: list of metrics to monitor. Must be subclass of torch.nn.Module and implements
-                        forward function
+        :param metrics: list of tuples ('metric_name', metric instance) to monitor.
+        Metric name is used as label for logging metric value to console and tensorboard.
+        Metric instance must be subclass of torch.nn.Module, implements forward function and
+        returns calculated value.
 
         :param tboard_img_size:  image size to use for writing images to tensorboard
         """
@@ -247,9 +250,9 @@ class Learner:
 
         # Check valid metrics types
         if metrics:
-            for metric in metrics:
-                if not (isinstance(metric, torch.nn.Module) and hasattr(metric, 'forward')):
-                    raise TypeError(f'{metric.__class__} is not supported')
+            for metric_name, metric_instance in metrics:
+                if not (isinstance(metric_instance, torch.nn.Module) and hasattr(metric_instance, 'forward')):
+                    raise TypeError(f'{metric_instance.__class__} is not supported')
 
         train_loss = 0
         epoch = 0
