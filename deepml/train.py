@@ -125,14 +125,17 @@ class Learner:
             for batch_index, (X, y) in enumerate(loader):
                 X = X.to(self.device)
                 y = y.to(self.device)
-                output = self.__model(X)
-                y = y.view_as(output)
-                loss = criterion(output, y)
+                outputs = self.__model(X)
+
+                if outputs.shape[1] == 1:
+                    y = y.view_as(outputs)
+
+                loss = criterion(outputs, y)
 
                 self.__metrics_dict['loss'] = self.__metrics_dict['loss'] + ((loss.item() - self.__metrics_dict['loss'])
                                                                              / (batch_index + 1))
 
-                self.__update_metrics(output, y, metrics, batch_index + 1)
+                self.__update_metrics(outputs, y, metrics, batch_index + 1)
                 if show_progress:
                     bar.update(1)
                     bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
@@ -158,10 +161,18 @@ class Learner:
                 return SemanticSegmentationPredictor(self.__model, classes=self.__classes)
 
     def __init_metrics(self, metrics):
+
+        if metrics is None:
+            return
+
         for metric in metrics:
             self.__metrics_dict[metric.__class__.__name__] = 0
 
     def __update_metrics(self, outputs, targets, metrics, step):
+
+        if metrics is None:
+            return
+
         # Update metrics
         outputs = outputs.to(self.device)
         targets = targets.to(self.device)
@@ -182,7 +193,7 @@ class Learner:
 
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
             save_model_after_every_epoch=5, lr_scheduler=None, image_inverse_transform=None,
-            show_progress=True, metrics=None):
+            show_progress=True, metrics=None, tboard_img_size=224):
 
         """
         Starts training the model on specified train loader
@@ -216,6 +227,7 @@ class Learner:
         :param metrics: list of metrics to monitor. Must be subclass of torch.nn.Module and implements
                         forward function
 
+        :param tboard_img_size:  image size to use for writing images to tensorboard
         """
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
@@ -234,9 +246,10 @@ class Learner:
             self.writer.add_graph(self.__model, next(iter(train_loader))[0].cuda())
 
         # Check valid metrics types
-        for metric in metrics:
-            if not (isinstance(metric, torch.nn.Module) and hasattr(metric, 'forward')):
-                raise TypeError(f'{metric.__class__} is not supported')
+        if metrics:
+            for metric in metrics:
+                if not (isinstance(metric, torch.nn.Module) and hasattr(metric, 'forward')):
+                    raise TypeError(f'{metric.__class__} is not supported')
 
         train_loss = 0
         epoch = 0
@@ -266,13 +279,16 @@ class Learner:
 
             for batch_index, (X, y) in enumerate(train_loader):
                 X = X.to(self.device)
-                y = y.to(self.device)
 
                 # zero the parameter gradients
                 self.__optimizer.zero_grad()
 
                 outputs = self.__model(X)
-                y = y.view_as(outputs)
+
+                if outputs.shape[1] == 1:
+                    y = y.view_as(outputs)
+
+                y = y.to(self.device)
                 loss = criterion(outputs, y)
                 loss.backward()
 
@@ -292,12 +308,10 @@ class Learner:
                     bar.update(1)
                     bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
 
-                if step % steps_per_epoch == 0 and image_inverse_transform is not None:
-                    self.writer.add_images('Images/Train/Input/', image_inverse_transform(X), epoch + 1)
-                    if y.ndim > 2:
-                        self.writer.add_images('Images/Train/Target', y, epoch + 1)
-                        self.writer.add_images('Images/Train/Output', utils.binarize(outputs), epoch + 1)
-                    break
+            X, y = utils.get_random_samples_batch_from_loader(train_loader)
+            X, y = X.to(self.device), y.to(self.device)
+            self.__predictor.write_prediction_to_tensorboard('Train', (X, y),
+                                                             self.writer, image_inverse_transform, epoch + 1)
 
             train_loss = self.__metrics_dict['loss']
             stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, self.__metrics_dict['loss'])
@@ -312,17 +326,11 @@ class Learner:
                 stats_info = stats_info + "\tVal Loss: {:.6f}".format(self.__metrics_dict['loss'])
                 self.__write_metrics_to_tensorboard('Val', epoch + 1)
 
-                # Log lass batch of val images to viz
-                if image_inverse_transform is not None:
-                    self.__model.eval()
-                    with torch.no_grad():
-                        X, y = utils.get_random_samples_batch_from_loader(val_loader)
-                        X, y = X.to(self.device), y.to(self.device)
-                        outputs = self.__model(X)
-                        self.writer.add_images('Images/Val/Input/', image_inverse_transform(X), epoch + 1)
-                        if y.ndim > 2:
-                            self.writer.add_images('Images/Val/Target', y)
-                            self.writer.add_images('Images/Val/Output', utils.binarize(outputs), epoch + 1)
+                # write random val images to tensorboard
+                X, y = utils.get_random_samples_batch_from_loader(val_loader)
+                X, y = X.to(self.device), y.to(self.device)
+                self.__predictor.write_prediction_to_tensorboard('Val', (X, y),
+                                                                 self.writer, image_inverse_transform, epoch + 1)
 
                 if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     lr_scheduler.step(val_loss)
@@ -393,4 +401,3 @@ class Learner:
 
         self.__predictor.show_predictions(loader, image_inverse_transform=image_inverse_transform,
                                           samples=samples, cols=cols, figsize=figsize)
-

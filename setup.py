@@ -13,6 +13,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/sagar-rathod/PytorchDeepML",
     packages=setuptools.find_packages(),
+    package_data={"deepml": ["resources/fonts/*.ttf"]},
     classifiers=[
         "Development Status :: 4 - Beta",
         "Programming Language :: Python :: 3.6",

@@ -36,7 +36,7 @@ class ImageRowDataFrameDataset(Dataset):
 
         y = 0
         if self.target_column is not None:
-            y = torch.tensor(self.target_column.loc[index])
+            y = self.target_column.loc[index]
 
         return X, y
 
@@ -75,7 +75,7 @@ class ImageFileDataFrameDataset(Dataset):
 
         y = 0
         if self.target_column is not None:
-            y = torch.tensor(self.dataframe.loc[index, self.target_column])
+            y = self.dataframe.loc[index, self.target_column]
 
         if self.transforms is not None:
             X = self.transforms(X)
