@@ -60,6 +60,12 @@ def plot_images(image_title_generator, samples, cols=4, figsize=(10, 10), fontsi
 
 
 def transform_target(target, classes=None):
+    """
+    Accepts target value either single dimensional torch.Tensor or (int, float)
+    :param target:
+    :param classes:
+    :return:
+    """
     if target is not None:
         target = target.item() if type(target) == torch.Tensor else target
         if type(target) == float and classes is None:
@@ -70,21 +76,28 @@ def transform_target(target, classes=None):
     return target
 
 
-def transform_input(X, image_inverse_transform=None):
+def transform_input(x, image_inverse_transform=None):
+    """
+    Accepts input image batch in #BCHW form
+
+    :param x: input image batch
+    :param image_inverse_transform: an optional inverse transform to apply
+    :return:
+    """
     if image_inverse_transform is not None:
-        X = image_inverse_transform(X.unsqueeze(dim=0)).squeeze()
-    return X.numpy().transpose(1, 2, 0)  # CWH -> WHC
+        x = image_inverse_transform(x)
+
+    # #BCHW --> #BHWC
+    return x.permute([0, 2, 3, 1])
 
 
 def show_images_from_loader(loader, image_inverse_transform=None, samples=9, cols=3, figsize=(5, 5),
                             classes=None, title_color=None):
-    indexes = np.random.randint(0, len(loader.dataset), samples)
+    x, y = get_random_samples_batch_from_loader(loader, samples=samples)
+    x = transform_input(x, image_inverse_transform)
 
-    def transform(input_batch):
-        x, y = input_batch
-        return transform_input(x, image_inverse_transform), transform_target(y, classes), title_color
-
-    image_title_generator = (transform(loader.dataset[index]) for index in indexes)
+    image_title_generator = ((x[index], transform_target(y[index], classes),
+                              title_color) for index in range(x.shape[0]))
     plot_images(image_title_generator, samples=samples, cols=cols, figsize=figsize)
 
 
@@ -97,12 +110,12 @@ def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10), title_
     plot_images(image_generator, len(samples), cols=cols, figsize=figsize)
 
 
-def get_random_samples_batch_from_loader(loader):
+def get_random_samples_batch_from_loader(loader, samples=None):
 
     if len(loader) == 0:
         raise ValueError('Loader is empty')
 
-    indexes = np.random.randint(0, len(loader.dataset), loader.batch_size)
+    indexes = np.random.randint(0, len(loader.dataset), loader.batch_size if samples is None else samples)
     samples, targets = [], []
     for index in indexes:
         x, y = loader.dataset[index]
