@@ -4,7 +4,10 @@ from collections import OrderedDict
 
 import numpy as np
 import torch
-from tqdm.auto import tqdm
+#from tqdm.auto import tqdm
+import fastprogress
+from fastprogress.fastprogress import master_bar, progress_bar
+
 from torch.utils.tensorboard import SummaryWriter
 
 from deepml.predict import ImageRegressionPredictor
@@ -119,7 +122,8 @@ class Learner:
         self.__init_metrics(metrics)
 
         if show_progress:
-            bar = tqdm(total=len(loader), desc="{:12s}".format('Validation'))
+            #bar = tqdm(total=len(loader), desc="{:12s}".format('Validation'))
+            pass
 
         with torch.no_grad():
             for batch_index, (X, y) in enumerate(loader):
@@ -260,9 +264,14 @@ class Learner:
         train_loss = 0
         epoch = 0
         epochs = self.epochs_completed + epochs
-        for epoch in range(self.epochs_completed, epochs):
+                          
+        mb = master_bar(range(self.epochs_completed, epochs))
+        first_time = True
+        #for epoch in range(self.epochs_completed, epochs):
+        for epoch in mb:                          
 
-            print('Epoch {}/{}:'.format(epoch + 1, epochs))
+            #print('Epoch {}/{}:'.format(epoch + 1, epochs))
+            mb.main_bar.comment = 'Epoch {}/{}:'.format(epoch + 1, epochs)
 
             # Training mode
             self.__model.train()
@@ -275,15 +284,16 @@ class Learner:
             self.__metrics_dict['loss'] = 0
             self.__init_metrics(metrics)
 
-            if show_progress:
-                bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
-            else:
-                print('Training...')
+            #if show_progress:
+            #    bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
+            #else:
+            #    print('Training...')
 
             # Write current lr to tensor-board
             self.__write_lr_to_tensorboard(epoch + 1)
 
-            for batch_index, (X, y) in enumerate(train_loader):
+            #for batch_index, (X, y) in enumerate(train_loader):
+            for batch_index, (X, y) in progress_bar(enumerate(train_loader),total=len(train_loader),parent=mb):
                 X = X.to(self.device)
 
                 # zero the parameter gradients
@@ -311,8 +321,9 @@ class Learner:
                 self.__update_metrics(outputs, y, metrics, step)
 
                 if show_progress:
-                    bar.update(1)
-                    bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
+                    #bar.update(1)
+                    #bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
+                    mb.child.comment = f'Training ...'      
 
             X, y = utils.get_random_samples_batch_from_loader(train_loader)
             X, y = X.to(self.device), y.to(self.device)
@@ -359,12 +370,18 @@ class Learner:
                 lr_step_done = True
 
             # print training/validation statistics
-            print(stats_info)
+            #pgrint(stats_info)
             self.writer.flush()
             if epoch % save_model_after_every_epoch == 0:
                 model_file_name = "model_epoch_{}.pt".format(epoch)
                 self.save(model_file_name, save_optimizer_state=True, epoch=epoch,
                           train_loss=train_loss, val_loss=val_loss)
+            if first_time:
+                name = ["epoch", "train_loss", "valid_loss"]
+                mb.write(name, table=True)
+                first_time = False
+            mb.write([epoch + 1, train_loss, val_loss], table=True)
+                          
 
         # Save latest model at the end
         self.save("latest_model.pt", save_optimizer_state=True, epoch=epoch, train_loss=train_loss,
@@ -393,7 +410,8 @@ class Learner:
         with torch.no_grad():
             for iteration in range(iterations):
                 print('Iteration:', iteration + 1)
-                for X, y in tqdm(loader, total=len(loader), desc='Feature Extraction'):
+                #for X, y in tqdm(loader, total=len(loader), desc='Feature Extraction'):
+                for X, y in loader:         
                     X = X.to(self.device)
                     feature_set = self.__model(X).cpu().numpy()
 
