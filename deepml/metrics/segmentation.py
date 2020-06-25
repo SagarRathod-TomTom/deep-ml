@@ -1,5 +1,22 @@
 import torch
-from .commons import Binarizer
+
+
+class Binarizer(torch.nn.Module):
+
+    def __init__(self, threshold=0.5, activation=None, value=1):
+        super(Binarizer, self).__init__()
+        self.activation = activation
+        self.threshold = threshold
+        self.value = value
+
+    def forward(self, output: torch.FloatTensor):
+        if self.activation is not None:
+            output = self.activation(output)
+
+        output[output >= self.threshold] = self.value
+        output[output < self.threshold] = 0
+
+        return output.to(torch.uint8)
 
 
 class Accuracy(torch.nn.Module):

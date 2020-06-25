@@ -254,6 +254,9 @@ class Learner:
                 if not (isinstance(metric_instance, torch.nn.Module) and hasattr(metric_instance, 'forward')):
                     raise TypeError(f'{metric_instance.__class__} is not supported')
 
+        # Replace all metrics for each learner fit
+        self.__metrics_dict = OrderedDict({'loss': 0})
+
         train_loss = 0
         epoch = 0
         epochs = self.epochs_completed + epochs

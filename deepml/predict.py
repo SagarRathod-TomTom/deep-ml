@@ -51,6 +51,10 @@ class Predictor(ABC):
         pass
 
     @abstractmethod
+    def predict_class(self, loader, use_gpu=False):
+        pass
+
+    @abstractmethod
     def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
         pass
 
@@ -71,6 +75,9 @@ class SemanticSegmentationPredictor(Predictor):
         raise NotImplementedError
 
     def predict(self, loader, use_gpu=False):
+        raise NotImplementedError()
+
+    def predict_class(self, loader, use_gpu=False):
         raise NotImplementedError()
 
     def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
@@ -123,6 +130,9 @@ class ImageRegressionPredictor(Predictor):
         targets = torch.cat(targets) if isinstance(targets[0], torch.Tensor) else np.hstack(targets).tolist()
 
         return predictions, targets
+
+    def predict_class(self, loader, use_gpu=False):
+        raise NotImplementedError()
 
     def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
         """
@@ -254,11 +264,15 @@ class ImageClassificationPredictor(ImageRegressionPredictor):
                 targets.append(y)
 
         predictions = torch.cat(predictions)
-        predictions = self.transform_output(predictions)
 
         targets = torch.cat(targets) if isinstance(targets[0], torch.Tensor) else np.hstack(targets).tolist()
 
         return targets, predictions
+
+    def predict_class(self, loader, use_gpu=False):
+        targets, predictions = self.predict(loader, use_gpu)
+        indices, probability = self.transform_output(predictions)
+        return targets, indices, probability
 
     def transform_target(self, y):
         if self.classes:
