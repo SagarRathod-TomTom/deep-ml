@@ -7,3 +7,4 @@ pillow >= 5.3.0
 albumentations >= 0.4.3
 tensorboard >= 1.14.0
 matplotlib >= 3.2.0
+fastprogress >= 0.2.3
