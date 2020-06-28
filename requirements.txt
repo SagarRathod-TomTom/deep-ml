@@ -9,3 +9,4 @@ tensorboard >= 1.14.0
 matplotlib == 2.2.5
 scikit-learn~=0.22
 setuptools~=42.0.2
+fastprogress >= 0.2.3
