@@ -7,9 +7,9 @@ import torch
 from tqdm.auto import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
-from .predict import ImageRegressionPredictor
-from .predict import ImageClassificationPredictor
-from .predict import SemanticSegmentationPredictor
+from deepml.predict import ImageRegressionPredictor
+from deepml.predict import ImageClassificationPredictor
+from deepml.predict import SemanticSegmentationPredictor
 
 from deepml import utils
 
@@ -245,8 +245,8 @@ class Learner:
             self.__predictor = self.__infer_predictor(x)
 
         # Write graph to tensorboard
-        if torch.cuda.is_available():
-            self.writer.add_graph(self.__model, next(iter(train_loader))[0].cuda())
+        temp_x, _ = train_loader.dataset[0]
+        self.writer.add_graph(self.__model, temp_x.unsqueeze(dim=0).to(self.device))
 
         # Check valid metrics types
         if metrics:
@@ -254,7 +254,7 @@ class Learner:
                 if not (isinstance(metric_instance, torch.nn.Module) and hasattr(metric_instance, 'forward')):
                     raise TypeError(f'{metric_instance.__class__} is not supported')
 
-        # Replace all metrics for each learner fit
+        # Replace all metrics during call to learner fit
         self.__metrics_dict = OrderedDict({'loss': 0})
 
         train_loss = 0
@@ -317,7 +317,8 @@ class Learner:
             X, y = utils.get_random_samples_batch_from_loader(train_loader)
             X, y = X.to(self.device), y.to(self.device)
             self.__predictor.write_prediction_to_tensorboard('Train', (X, y),
-                                                             self.writer, image_inverse_transform, epoch + 1)
+                                                             self.writer, image_inverse_transform, epoch + 1,
+                                                             img_size=tboard_img_size)
 
             train_loss = self.__metrics_dict['loss']
             stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, self.__metrics_dict['loss'])
@@ -336,7 +337,8 @@ class Learner:
                 X, y = utils.get_random_samples_batch_from_loader(val_loader)
                 X, y = X.to(self.device), y.to(self.device)
                 self.__predictor.write_prediction_to_tensorboard('Val', (X, y),
-                                                                 self.writer, image_inverse_transform, epoch + 1)
+                                                                 self.writer, image_inverse_transform, epoch + 1,
+                                                                 img_size=tboard_img_size)
 
                 if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     lr_scheduler.step(val_loss)
