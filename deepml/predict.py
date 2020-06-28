@@ -2,7 +2,6 @@ import os
 from abc import ABC, abstractmethod
 
 import numpy as np
-#from tqdm.auto import tqdm
 import fastprogress
 from fastprogress.fastprogress import master_bar, progress_bar
 
@@ -122,10 +121,9 @@ class ImageRegressionPredictor(Predictor):
         predictions = []
         targets = []
         with torch.no_grad():
-            #for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
             pbar = progress_bar(loader, total=len(loader), parent=None)
+            pbar.comment = "Prediction"
             for X, y in pbar:
-                pbar.comment="Prediction"
                 if use_gpu:
                     X = X.to(device)
                 y_pred = self._model(X).cpu()
@@ -263,7 +261,6 @@ class ImageClassificationPredictor(ImageRegressionPredictor):
         targets = []
 
         with torch.no_grad():
-            #for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
             pbar = progress_bar(loader, total=len(loader), parent=None)
             for X, y in pbar:
                 pbar.comment = "Prediction"
