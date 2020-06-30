@@ -2,9 +2,7 @@ import os
 from abc import ABC, abstractmethod
 
 import numpy as np
-import fastprogress
-from fastprogress.fastprogress import master_bar, progress_bar
-
+from tqdm.auto import tqdm
 import torch
 import torchvision
 import torch.nn.functional as F
@@ -121,9 +119,7 @@ class ImageRegressionPredictor(Predictor):
         predictions = []
         targets = []
         with torch.no_grad():
-            pbar = progress_bar(loader, total=len(loader), parent=None)
-            pbar.comment = "Prediction"
-            for X, y in pbar:
+            for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
                 if use_gpu:
                     X = X.to(device)
                 y_pred = self._model(X).cpu()
@@ -261,24 +257,21 @@ class ImageClassificationPredictor(ImageRegressionPredictor):
         targets = []
 
         with torch.no_grad():
-            pbar = progress_bar(loader, total=len(loader), parent=None)
-            for X, y in pbar:
-                pbar.comment = "Prediction"
+            for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
                 X = X.to(device)
                 y_pred = self._model(X).cpu()
                 predictions.append(y_pred)
                 targets.append(y)
 
         predictions = torch.cat(predictions)
-
         targets = torch.cat(targets) if isinstance(targets[0], torch.Tensor) else np.hstack(targets).tolist()
 
-        return targets, predictions
+        return predictions, targets
 
     def predict_class(self, loader, use_gpu=False):
-        targets, predictions = self.predict(loader, use_gpu)
-        indices, probability = self.transform_output(predictions)
-        return targets, indices, probability
+        predictions, targets = self.predict(loader, use_gpu)
+        predicted_class, probability = self.transform_output(predictions)
+        return predicted_class, probability, targets
 
     def transform_target(self, y):
         if self.classes:

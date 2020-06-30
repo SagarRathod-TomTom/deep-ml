@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 import numpy as np
 import torch
-from fastprogress.fastprogress import master_bar, progress_bar
+from tqdm.auto import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -111,7 +111,7 @@ class Learner:
 
         return filepath
 
-    def validate(self, criterion, loader, metrics=None, parent_bar=None):
+    def validate(self, criterion, loader, metrics=None):
         if loader is None:
             raise Exception('Loader cannot be None.')
 
@@ -119,16 +119,10 @@ class Learner:
         self.__metrics_dict['loss'] = 0
         self.__init_metrics(metrics)
 
+        bar = tqdm(total=len(loader), desc="{:12s}".format('Validation'))
+
         with torch.no_grad():
-
-            if parent_bar is None:
-                validation_bar = progress_bar(enumerate(loader), total=len(loader), parent=None)
-                validation_bar.comment = f'Validation ...'
-            else:
-                validation_bar = progress_bar(enumerate(loader), total=len(loader), parent=parent_bar)
-                parent_bar.child.comment = f'Validation ...'
-
-            for batch_index, (X, y) in validation_bar:
+            for batch_index, (X, y) in enumerate(loader):
 
                 X = X.to(self.device)
                 y = y.to(self.device)
@@ -141,8 +135,10 @@ class Learner:
 
                 self.__metrics_dict['loss'] = self.__metrics_dict['loss'] + ((loss.item() - self.__metrics_dict['loss'])
                                                                              / (batch_index + 1))
-
                 self.__update_metrics(outputs, y, metrics, batch_index + 1)
+
+                bar.update(1)
+                bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
 
         return self.__metrics_dict
 
@@ -263,14 +259,8 @@ class Learner:
         train_loss = 0
         epoch = 0
         epochs = self.epochs_completed + epochs
-
-        epoch_bar = master_bar(range(self.epochs_completed, epochs))
-        first_time = True
-
-        for epoch in epoch_bar:
-
-            epoch_bar.main_bar.comment = 'Epoch {}/{}:'.format(epoch + 1, epochs)
-
+        for epoch in range(self.epochs_completed, epochs):
+            print('Epoch {}/{}:'.format(epoch + 1, epochs))
             # Training mode
             self.__model.train()
 
@@ -285,9 +275,8 @@ class Learner:
             # Write current lr to tensor-board
             self.__write_lr_to_tensorboard(epoch + 1)
 
-            for batch_index, (X, y) in progress_bar(enumerate(train_loader), total=len(train_loader), parent=epoch_bar):
-
-                epoch_bar.child.comment = f'Training ...'
+            bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
+            for batch_index, (X, y) in enumerate(train_loader):
 
                 X = X.to(self.device)
 
@@ -314,12 +303,15 @@ class Learner:
                                                                              / step)
                 # Update metrics
                 self.__update_metrics(outputs, y, metrics, step)
+                bar.update(1)
+                bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
 
+            # Write some sample training images to tensorboard
             X, y = utils.get_random_samples_batch_from_loader(train_loader)
             X, y = X.to(self.device), y.to(self.device)
             self.__predictor.write_prediction_to_tensorboard('Train', (X, y),
-                                                             self.writer, image_inverse_transform, epoch + 1,
-                                                             img_size=tboard_img_size)
+                                                             self.writer, image_inverse_transform,
+                                                             epoch + 1, img_size=tboard_img_size)
 
             train_loss = self.__metrics_dict['loss']
             stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, self.__metrics_dict['loss'])
@@ -329,7 +321,7 @@ class Learner:
 
             val_loss = np.inf
             if val_loader is not None:
-                self.validate(criterion, val_loader, metrics, parent_bar=epoch_bar)
+                self.validate(criterion, val_loader, metrics)
                 val_loss = self.__metrics_dict['loss']
                 stats_info = stats_info + "\tVal Loss: {:.6f}".format(self.__metrics_dict['loss'])
                 self.__write_metrics_to_tensorboard('Val', epoch + 1)
@@ -357,22 +349,15 @@ class Learner:
 
             if lr_scheduler is not None and not lr_step_done:
                 lr_scheduler.step()
-                lr_step_done = True
 
             # print training/validation statistics
+            print(stats_info)
 
             self.writer.flush()
             if epoch % save_model_after_every_epoch == 0:
                 model_file_name = "model_epoch_{}.pt".format(epoch)
                 self.save(model_file_name, save_optimizer_state=True, epoch=epoch,
                           train_loss=train_loss, val_loss=val_loss)
-
-            if first_time:
-                name = ["epoch", "train_loss", "valid_loss"]
-                epoch_bar.write(name, table=True)
-                first_time = False
-
-            epoch_bar.write([epoch + 1, train_loss, val_loss], table=True)
 
         # Save latest model at the end
         self.save("latest_model.pt", save_optimizer_state=True, epoch=epoch, train_loss=train_loss,
@@ -381,6 +366,11 @@ class Learner:
     def predict(self, loader):
         predictions, targets = self.__predictor.predict(loader, use_gpu=str(self.device) == "cuda:0")
         return predictions, targets
+
+    def predict_class(self, loader):
+        predicted_class, probability, targets = self.__predictor.predict_class(loader,
+                                                                               use_gpu=str(self.device) == "cuda:0")
+        return predicted_class, probability, targets
 
     def extract_features(self, loader, no_of_features, features_csv_file, iterations=1,
                          target_known=True):
@@ -400,9 +390,8 @@ class Learner:
         self.__model.eval()
         with torch.no_grad():
             for iteration in range(iterations):
-                feature_pbar = progress_bar(loader, total=len(loader), parent=None)
-                feature_pbar.comment = f"Feature Extraction - Iteration: {iteration + 1}"
-                for X, y in feature_pbar:
+                print('Iteration:', iteration + 1)
+                for X, y in tqdm(loader, total=len(loader), desc='Feature Extraction'):
                     X = X.to(self.device)
                     feature_set = self.__model(X).cpu().numpy()
 
