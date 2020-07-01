@@ -306,31 +306,30 @@ class Learner:
                 bar.update(1)
                 bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
 
+            self.epochs_completed = self.epochs_completed + 1
+
             # Write some sample training images to tensorboard
             X, y = utils.get_random_samples_batch_from_loader(train_loader)
             X, y = X.to(self.device), y.to(self.device)
             self.__predictor.write_prediction_to_tensorboard('Train', (X, y),
                                                              self.writer, image_inverse_transform,
-                                                             epoch + 1, img_size=tboard_img_size)
+                                                             self.epochs_completed, img_size=tboard_img_size)
 
             train_loss = self.__metrics_dict['loss']
-            stats_info = 'Epoch: {}/{}\tTrain Loss: {:.6f}'.format(epoch + 1, epochs, self.__metrics_dict['loss'])
-            self.epochs_completed = self.epochs_completed + 1
-
-            self.__write_metrics_to_tensorboard('Train', epoch + 1)
+            self.__write_metrics_to_tensorboard('Train', self.epochs_completed)
 
             val_loss = np.inf
             if val_loader is not None:
                 self.validate(criterion, val_loader, metrics)
                 val_loss = self.__metrics_dict['loss']
-                stats_info = stats_info + "\tVal Loss: {:.6f}".format(self.__metrics_dict['loss'])
-                self.__write_metrics_to_tensorboard('Val', epoch + 1)
+                self.__write_metrics_to_tensorboard('Val', self.epochs_completed)
 
                 # write random val images to tensorboard
                 X, y = utils.get_random_samples_batch_from_loader(val_loader)
                 X, y = X.to(self.device), y.to(self.device)
                 self.__predictor.write_prediction_to_tensorboard('Val', (X, y),
-                                                                 self.writer, image_inverse_transform, epoch + 1,
+                                                                 self.writer, image_inverse_transform,
+                                                                 self.epochs_completed,
                                                                  img_size=tboard_img_size)
 
                 if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
@@ -340,28 +339,24 @@ class Learner:
                 # Save best validation model
                 if val_loss < self.best_val_loss:
                     self.best_val_loss = val_loss
-                    print('Saving best validation model.')
                     self.save('best_val_model.pt',
                               save_optimizer_state=True,
-                              epoch=epoch,
+                              epoch=self.epochs_completed,
                               train_loss=train_loss,
                               val_loss=val_loss)
 
             if lr_scheduler is not None and not lr_step_done:
                 lr_scheduler.step()
 
-            # print training/validation statistics
-            print(stats_info)
-
             self.writer.flush()
             if epoch % save_model_after_every_epoch == 0:
                 model_file_name = "model_epoch_{}.pt".format(epoch)
-                self.save(model_file_name, save_optimizer_state=True, epoch=epoch,
+                self.save(model_file_name, save_optimizer_state=True, epoch=self.epochs_completed,
                           train_loss=train_loss, val_loss=val_loss)
 
         # Save latest model at the end
-        self.save("latest_model.pt", save_optimizer_state=True, epoch=epoch, train_loss=train_loss,
-                  val_loss=self.best_val_loss)
+        self.save("latest_model.pt", save_optimizer_state=True, epoch=self.epochs_completed,
+                  train_loss=train_loss, val_loss=self.best_val_loss)
 
     def predict(self, loader):
         predictions, targets = self.__predictor.predict(loader, use_gpu=str(self.device) == "cuda:0")
