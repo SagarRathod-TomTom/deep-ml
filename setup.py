@@ -5,14 +5,14 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="deepml",
-    version="1.0.0",
+    version="1.0.1",
     author="Sagar Rathod",
     author_email="sagar100rathod@gmail.com",
     description="Library for training deep neural nets in Pytorch.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/sagar-rathod/PytorchDeepML",
-    packages=setuptools.find_packages(include="deepml"),
+    packages=setuptools.find_packages(include=["deepml"]),
     package_data={"deepml": ["resources/fonts/*.ttf"]},
     classifiers=[
         "Development Status :: 5 - Production/Stable",
