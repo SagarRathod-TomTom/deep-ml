@@ -15,10 +15,11 @@ setuptools.setup(
     packages=setuptools.find_packages(include="deepml"),
     package_data={"deepml": ["resources/fonts/*.ttf"]},
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "License :: OSI Approved :: MIT License",
+        "License :: Free For Educational Use",
         "Operating System :: OS Independent",
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
@@ -26,6 +27,6 @@ setuptools.setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     python_requires='>=3.6',
-    install_requires=['torch>=1.0.0', 'torchvision>=0.2.1', 'tensorboard>=1.14.0', 'scikit-learn>=0.22',
-                      "pandas>=0.25.3", "matplotlib>=2.2.5"]
-)
+    install_requires=["tensorboard>=1.14.0", "scikit-learn>=0.22",
+                      "numpy>=1.16", "pandas>=0.25.3", "matplotlib>=2.2.5"]
+    )

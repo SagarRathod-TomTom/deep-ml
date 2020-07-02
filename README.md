@@ -15,19 +15,21 @@ segmentation problems.
 
 # Installation
 
+Before installing **deepml**, it is recommended to refer [pytorch](https://pytorch.org/) official page for **torch** installation.
+
 ###Pypi
 
 ```bash
 pip install deepml
 ```
 
-### Examples
+
+# Examples
 Check out the below google colaboratory notebook examples:
 
 1. [Image Regression](https://colab.research.google.com/github/sagar-rathod/PytorchDeepML/blob/master/examples/Image_Regression_Example.ipynb).
 2. [Image Classification](https://colab.research.google.com/github/sagar-rathod/PytorchDeepML/blob/master/examples/Image_Classification_Example.ipynb).
 3. Semantic Segmentation. [Coming Soon]
-4. Object Detection. [Coming Soon]
 
 
 # Contributing
