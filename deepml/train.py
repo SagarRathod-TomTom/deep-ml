@@ -8,6 +8,7 @@ from tqdm.auto import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
 
+from deepml.predict import Predictor
 from deepml.predict import ImageRegressionPredictor
 from deepml.predict import ImageClassificationPredictor
 from deepml.predict import SemanticSegmentationPredictor
@@ -159,6 +160,10 @@ class Learner:
                 return ImageClassificationPredictor(self.__model, classes=self.__classes)
             else:
                 return SemanticSegmentationPredictor(self.__model, classes=self.__classes)
+
+    def set_predictor(self, predictor):
+        assert issubclass(predictor, Predictor)
+        self.__predictor = predictor
 
     def __init_metrics(self, metrics):
         if metrics is None:
@@ -353,7 +358,7 @@ class Learner:
                 model_file_name = "model_epoch_{}.pt".format(epoch)
                 self.save(model_file_name, save_optimizer_state=True, epoch=self.epochs_completed,
                           train_loss=train_loss, val_loss=val_loss)
-
+        
         # Save latest model at the end
         self.save("latest_model.pt", save_optimizer_state=True, epoch=self.epochs_completed,
                   train_loss=train_loss, val_loss=self.best_val_loss)
