@@ -12,7 +12,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/sagar-rathod/PytorchDeepML",
-    packages=setuptools.find_packages(include=["deepml"]),
+    packages=setuptools.find_packages(include=["deepml", "deepml.*"]),
     package_data={"deepml": ["resources/fonts/*.ttf"]},
     classifiers=[
         "Development Status :: 5 - Production/Stable",
