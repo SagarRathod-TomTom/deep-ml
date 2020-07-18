@@ -162,7 +162,7 @@ class Learner:
                 return SemanticSegmentationPredictor(self.__model, classes=self.__classes)
 
     def set_predictor(self, predictor):
-        assert issubclass(predictor, Predictor)
+        assert isinstance(predictor, Predictor)
         self.__predictor = predictor
 
     def __init_metrics(self, metrics):
