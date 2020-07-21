@@ -1,11 +1,12 @@
 import setuptools
+import deepml
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="deepml",
-    version="1.0.1",
+    version=deepml.__version__,
     author="Sagar Rathod",
     author_email="sagar100rathod@gmail.com",
     description="Library for training deep neural nets in Pytorch.",
