@@ -64,6 +64,60 @@ class Predictor(ABC):
         pass
 
 
+class SimplePredictor(Predictor):
+    """
+        Use this simple predictor class to avoid writing to tensorboard.
+    """
+
+    def __init__(self, model: torch.nn.Module, model_save_path=None,
+                 model_file_name=None, classes=None):
+        super(SimplePredictor, self).__init__(model, model_save_path,
+                                              model_file_name, classes=classes)
+
+    def predict(self, loader, use_gpu=False):
+        """
+        Accepts torch data loader and performs prediction
+        :param loader:
+        :param use_gpu: boolean indicating whether to use GPU
+        :return: triplet of torch.Tensor of (targets, predicted class index, probability)
+        """
+
+        assert loader is not None and len(loader) > 0
+
+        device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
+        self._model = self._model.to(device)
+        predictions = []
+        targets = []
+        with torch.no_grad():
+            for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
+                if use_gpu:
+                    X = X.to(device)
+                y_pred = self._model(X).cpu()
+                predictions.append(y_pred)
+                targets.append(y)
+
+        predictions = torch.cat(predictions)
+        targets = torch.cat(targets) if isinstance(targets[0], torch.Tensor) else np.hstack(targets).tolist()
+
+        return predictions, targets
+
+    def predict_class(self, loader, use_gpu=False):
+        raise NotImplementedError()
+
+    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
+        raise NotImplementedError()
+
+    def transform_target(self, y):
+        raise NotImplementedError()
+
+    def transform_output(self, prediction):
+        raise NotImplementedError()
+
+    def write_prediction_to_tensorboard(self, tag, image_batch, writer, image_inverse_transform,
+                                        global_step, img_size=224):
+        pass
+
+
 class SemanticSegmentationPredictor(Predictor):
 
     def __init__(self, model: torch.nn.Module, model_save_path=None,
@@ -94,7 +148,7 @@ class SemanticSegmentationPredictor(Predictor):
         raise NotImplementedError()
 
 
-class ImageRegressionPredictor(Predictor):
+class ImageRegressionPredictor(SimplePredictor):
     """
     The class useful for doing direct predictions in image classification problems.
     """
@@ -103,33 +157,6 @@ class ImageRegressionPredictor(Predictor):
                  model_file_name=None, classes=None):
         super(ImageRegressionPredictor, self).__init__(model, model_save_path,
                                                        model_file_name, classes=classes)
-
-    def predict(self, loader, use_gpu=False):
-        """
-        Accepts torch data loader and performs prediction
-        :param loader:
-        :param use_gpu: boolean indicating whether to use GPU
-        :return: triplet of torch.Tensor of (targets, predicted class index, probability)
-        """
-
-        assert loader is not None and len(loader) > 0
-
-        device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
-        self._model = self._model.to(device)
-        predictions = []
-        targets = []
-        with torch.no_grad():
-            for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
-                if use_gpu:
-                    X = X.to(device)
-                y_pred = self._model(X).cpu()
-                predictions.append(y_pred)
-                targets.append(y)
-
-        predictions = torch.cat(predictions)
-        targets = torch.cat(targets) if isinstance(targets[0], torch.Tensor) else np.hstack(targets).tolist()
-
-        return predictions, targets
 
     def predict_class(self, loader, use_gpu=False):
         raise NotImplementedError()
@@ -169,7 +196,7 @@ class ImageRegressionPredictor(Predictor):
 
     def transform_target(self, y):
         """
-        Accepts python float
+        Accepts torch Tensor
         :param y:
         :return:
         """
@@ -177,7 +204,7 @@ class ImageRegressionPredictor(Predictor):
 
     def transform_output(self, prediction):
         """
-        Accepts python float
+        Accepts torch Tensor
         :param prediction:
         :return:
         """
@@ -232,7 +259,7 @@ class ImageRegressionPredictor(Predictor):
             writer.add_images(f'{tag}', torch.stack(output_images), global_step)
 
 
-class ImageClassificationPredictor(ImageRegressionPredictor):
+class ImageClassificationPredictor(SimplePredictor):
     """
     The class useful for doing direct predictions in image classification problems.
     """
@@ -241,32 +268,6 @@ class ImageClassificationPredictor(ImageRegressionPredictor):
                  model_file_name=None, classes=None):
         super(ImageClassificationPredictor, self).__init__(model, model_save_path,
                                                            model_file_name, classes=classes)
-
-    def predict(self, loader, use_gpu=False):
-        """
-        Accepts torch data loader and performs prediction
-        :param loader:
-        :param use_gpu: boolean indicating whether to use GPU
-        :return: triplet of torch.Tensor of (targets, predicted class index, probability)
-        """
-
-        assert loader is not None and len(loader) > 0
-        device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
-        self._model = self._model.to(device)
-        predictions = []
-        targets = []
-
-        with torch.no_grad():
-            for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
-                X = X.to(device)
-                y_pred = self._model(X).cpu()
-                predictions.append(y_pred)
-                targets.append(y)
-
-        predictions = torch.cat(predictions)
-        targets = torch.cat(targets) if isinstance(targets[0], torch.Tensor) else np.hstack(targets).tolist()
-
-        return predictions, targets
 
     def predict_class(self, loader, use_gpu=False):
         predictions, targets = self.predict(loader, use_gpu)
