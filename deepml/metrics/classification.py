@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from .commons import true_positives, false_positives, false_negatives, multiclass_tp_fp_tn_fn
+from .commons import true_positives, true_negatives, false_positives, false_negatives, multiclass_tp_fp_tn_fn
 
 
 class Binarizer(torch.nn.Module):
@@ -92,3 +92,35 @@ class FScore(torch.nn.Module):
         recall = tp / (tp + fn + self.epsilon)
 
         return ((1 + self.beta ** 2) * precision * recall) / (self.beta ** 2 * (precision + recall))
+
+
+class MCC(torch.nn.Module):
+
+    """
+    Matthews correlation coefficient
+    The metric useful for imbalanced dataset.
+
+    Check more info at https://en.wikipedia.org/wiki/Matthews_correlation_coefficient
+    """
+
+    def __init__(self, threshold=0.5, epsilon=1e-6):
+        super(MCC, self).__init__()
+        self.binarize = Binarizer(threshold)
+        self.epsilon = epsilon
+
+    def forward(self, output, target):
+        indices, probabilities = self.binarize(output)
+        if output.shape[-1] > 1:
+            # multiclass
+            tp, fp, tn, fn = multiclass_tp_fp_tn_fn(indices, target)
+        else:
+            tp = true_positives(indices, target)
+            tn = true_negatives(indices, target)
+            fp = false_positives(indices, target)
+            fn = false_negatives(indices, target)
+
+        numerator = (tp * tn) - (fp * fn)
+        denominator = torch.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+
+        return numerator / (denominator + self.epsilon)
+
