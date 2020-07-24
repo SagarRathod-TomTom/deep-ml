@@ -46,15 +46,10 @@ class Learner:
             self.load_saved_model(os.path.join(self.model_save_path, model_file_name),
                                   load_optimizer_state)
 
-        self.set_optimizer(self.__optimizer)
-
     def set_optimizer(self, optimizer):
-        if optimizer is None:
-            raise ValueError('Optimizer cannot be None.')
 
-        self.__model = self.__model.to(self.device)
-        self.__optimizer = optimizer.__class__(self.__model.parameters(),
-                                               **optimizer.defaults)
+        assert isinstance(optimizer, torch.optim.Optimizer)
+        self.__optimizer = optimizer
 
     def load_saved_model(self, model_path, load_optimizer_state=False):
         if os.path.exists(model_path):
@@ -195,15 +190,20 @@ class Learner:
 
     def __write_lr_to_tensorboard(self, global_step):
         # Write lr to tensor-board
-        param_group = self.__optimizer.param_groups[0]
-        self.writer.add_scalar('learning_rate', param_group['lr'], global_step)
+        if len(self.__optimizer.param_groups) == 1:
+            param_group = self.__optimizer.param_groups[0]
+            self.writer.add_scalar('learning_rate', param_group['lr'], global_step)
+        else:
+            for index, param_group in enumerate(self.__optimizer.param_groups):
+                self.writer.add_scalar(f'learning_rate/param_group_{index}', param_group['lr'],
+                                       global_step)
 
     def fit(self, criterion, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
-            save_model_after_every_epoch=5, lr_scheduler=None, image_inverse_transform=None,
-            metrics=None, tboard_img_size=224):
+            save_model_after_every_epoch=5, lr_scheduler=None, lr_scheduler_step_policy='epoch',
+            image_inverse_transform=None, metrics=None, tboard_img_size=224):
 
         """
-        Starts training the model on specified train loader
+        Trains the model on specified train loader for specified number of epochs.
 
         Parameters
         ----------
@@ -212,27 +212,32 @@ class Learner:
         :param train_loader: The torch.utils.data.DataLoader for model to train on.
 
         :param val_loader: The torch.utils.data.DataLoader for model to validate on.
-        Default is None.
+                           Default is None.
 
         :param epochs: int The number of epochs to train. Default is 10
 
-        :param steps_per_epoch: Should be around len(train_loader),
-        so that every example in the dataset gets covered in each epoch.
+        :param steps_per_epoch: Should be around len(train_loader), so that every example in the
+                                dataset gets covered in each epoch.
 
         :param save_model_after_every_epoch: To save the model after every number of completed epochs
-        Default is 5.
+                                            Default is 5.
 
         :param lr_scheduler: the learning rate scheduler, default is None.
 
-        :param image_inverse_transform: It denotes reverse transformations of image normalization so that images
+        :param lr_scheduler_step_policy: It is the time when lr_scheduler.step() would be called.
+                                         Default is "epoch" policy.
+                                         Use "batch" policy if you want lr_scheduler.step() to be
+                                         called after each gradient step.
 
-        can be displayed on tensor board. Default is deepml.transforms.ImageNetInverseTransform() which is
-        an inverse of ImageNet normalization.
+        :param image_inverse_transform: It denotes reverse transformations of image normalization so that images
+                                        can be displayed on tensor board.
+                                        Default is deepml.transforms.ImageNetInverseTransform() which is
+                                        an inverse of ImageNet normalization.
 
         :param metrics: list of tuples ('metric_name', metric instance) to monitor.
-        Metric name is used as label for logging metric value to console and tensorboard.
-        Metric instance must be subclass of torch.nn.Module, implements forward function and
-        returns calculated value.
+                        Metric name is used as label for logging metric value to console and tensorboard.
+                        Metric instance must be subclass of torch.nn.Module, implements forward function and
+                        returns calculated value.
 
         :param tboard_img_size:  image size to use for writing images to tensorboard
         """
@@ -258,11 +263,15 @@ class Learner:
                 if not (isinstance(metric_instance, torch.nn.Module) and hasattr(metric_instance, 'forward')):
                     raise TypeError(f'{metric_instance.__class__} is not supported')
 
+        # Check valid policy for lr_scheduler
+        if lr_scheduler is not None:
+            lr_scheduler_step_policy = lr_scheduler_step_policy.lower()
+            assert isinstance(lr_scheduler_step_policy, str) and lr_scheduler_step_policy in ['epoch', 'batch']
+
         # Replace all metrics during call to learner fit
         self.__metrics_dict = OrderedDict({'loss': 0})
 
         train_loss = 0
-        epoch = 0
         epochs = self.epochs_completed + epochs
         for epoch in range(self.epochs_completed, epochs):
             print('Epoch {}/{}:'.format(epoch + 1, epochs))
@@ -271,7 +280,6 @@ class Learner:
 
             # Iterate over batches
             step = 0
-            lr_step_done = False
 
             # init all metrics with zeros
             self.__metrics_dict['loss'] = 0
@@ -299,9 +307,8 @@ class Learner:
 
                 self.__optimizer.step()
 
-                if isinstance(lr_scheduler, torch.optim.lr_scheduler.CyclicLR):
+                if lr_scheduler is not None and lr_scheduler_step_policy == "batch":
                     lr_scheduler.step()
-                    lr_step_done = True
 
                 step = step + 1
                 self.__metrics_dict['loss'] = self.__metrics_dict['loss'] + ((loss.item() - self.__metrics_dict['loss'])
@@ -337,12 +344,9 @@ class Learner:
                                                                  self.epochs_completed,
                                                                  img_size=tboard_img_size)
 
-                if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    lr_scheduler.step(val_loss)
-                    lr_step_done = True
-
                 # Save best validation model
                 if val_loss < self.best_val_loss:
+                    print("Saving best validation model.")
                     self.best_val_loss = val_loss
                     self.save('best_val_model.pt',
                               save_optimizer_state=True,
@@ -350,8 +354,12 @@ class Learner:
                               train_loss=train_loss,
                               val_loss=val_loss)
 
-            if lr_scheduler is not None and not lr_step_done:
-                lr_scheduler.step()
+            if lr_scheduler is not None and lr_scheduler_step_policy == "epoch":
+                if val_loader is not None and isinstance(lr_scheduler,
+                                                         torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    lr_scheduler.step(val_loss)
+                else:
+                    lr_scheduler.step()
 
             self.writer.flush()
             if epoch % save_model_after_every_epoch == 0:
