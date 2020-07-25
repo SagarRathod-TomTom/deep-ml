@@ -36,7 +36,6 @@ class Learner:
         os.makedirs(self.model_save_path, exist_ok=True)
         self.writer = SummaryWriter(os.path.join(self.model_save_path,
                                                  utils.find_new_run_dir_name(self.model_save_path)))
-        self.device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
 
         self.__predictor = None
         self.__classes = classes
@@ -45,11 +44,25 @@ class Learner:
         if load_saved_model and model_file_name is not None:
             self.load_saved_model(os.path.join(self.model_save_path, model_file_name),
                                   load_optimizer_state)
+        self.__device = "cuda" if use_gpu else "cpu"
+        self.set_device(self.__device)
 
     def set_optimizer(self, optimizer):
 
         assert isinstance(optimizer, torch.optim.Optimizer)
         self.__optimizer = optimizer
+
+    def set_device(self, device):
+        assert isinstance(device, str) and device.lower() in ['cpu', 'cuda']
+        device = device.lower()
+        self.__device = device if device == "cuda" and torch.cuda.is_available() else "cpu"
+
+        self.__model.to(self.__device)
+
+        for optim_state_values_dict in self.__optimizer.state.values():
+            for key in optim_state_values_dict:
+                if type(optim_state_values_dict[key]) == torch.Tensor:
+                    optim_state_values_dict[key] = optim_state_values_dict[key].to(self.__device)
 
     def load_saved_model(self, model_path, load_optimizer_state=False):
         if os.path.exists(model_path):
@@ -82,7 +95,7 @@ class Learner:
 
     def save(self, model_file_name, save_optimizer_state=False, epoch=None, train_loss=None, val_loss=None):
         # Convert model into cpu before saving the model state
-        self.__model.to("cpu")
+        self.set_device("cpu")
         save_dict = {'model': self.__model.state_dict()}
 
         if save_optimizer_state:
@@ -103,8 +116,8 @@ class Learner:
 
         filepath = os.path.join(self.model_save_path, model_file_name)
         torch.save(save_dict, filepath)
-        self.__model.to(self.device)
 
+        self.set_device(self.__device)
         return filepath
 
     def validate(self, criterion, loader, metrics=None):
@@ -120,8 +133,8 @@ class Learner:
         with torch.no_grad():
             for batch_index, (X, y) in enumerate(loader):
 
-                X = X.to(self.device)
-                y = y.to(self.device)
+                X = X.to(self.__device)
+                y = y.to(self.__device)
                 outputs = self.__model(X)
 
                 if outputs.shape[1] == 1:
@@ -142,7 +155,7 @@ class Learner:
 
         self.__model.eval()
         with torch.no_grad():
-            prediction = self.__model(x.to(self.device)).cpu()
+            prediction = self.__model(x.to(self.__device)).cpu()
 
             if self.__classes is None:
                 try:
@@ -176,8 +189,8 @@ class Learner:
             return
 
         # Update metrics
-        outputs = outputs.to(self.device)
-        targets = targets.to(self.device)
+        outputs = outputs.to(self.__device)
+        targets = targets.to(self.__device)
 
         for metric_name, metric_instance in metrics:
             self.__metrics_dict[metric_name] = self.__metrics_dict[metric_name] + \
@@ -244,8 +257,8 @@ class Learner:
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
 
-        self.__model = self.__model.to(self.device)
-        criterion = criterion.to(self.device)
+        self.set_device(self.__device)
+        criterion = criterion.to(self.__device)
 
         if self.__predictor is None:
             x, _ = train_loader.dataset[0]
@@ -255,7 +268,7 @@ class Learner:
 
         # Write graph to tensorboard
         temp_x, _ = train_loader.dataset[0]
-        self.writer.add_graph(self.__model, temp_x.unsqueeze(dim=0).to(self.device))
+        self.writer.add_graph(self.__model, temp_x.unsqueeze(dim=0).to(self.__device))
 
         # Check valid metrics types
         if metrics:
@@ -291,7 +304,7 @@ class Learner:
             bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
             for batch_index, (X, y) in enumerate(train_loader):
 
-                X = X.to(self.device)
+                X = X.to(self.__device)
 
                 # zero the parameter gradients
                 self.__optimizer.zero_grad()
@@ -301,7 +314,7 @@ class Learner:
                 if outputs.shape[1] == 1:
                     y = y.view_as(outputs)
 
-                y = y.to(self.device)
+                y = y.to(self.__device)
                 loss = criterion(outputs, y)
                 loss.backward()
 
@@ -322,7 +335,7 @@ class Learner:
 
             # Write some sample training images to tensorboard
             X, y = utils.get_random_samples_batch_from_loader(train_loader)
-            X, y = X.to(self.device), y.to(self.device)
+            X, y = X.to(self.__device), y.to(self.__device)
             self.__predictor.write_prediction_to_tensorboard('Train', (X, y),
                                                              self.writer, image_inverse_transform,
                                                              self.epochs_completed, img_size=tboard_img_size)
@@ -338,7 +351,7 @@ class Learner:
 
                 # write random val images to tensorboard
                 X, y = utils.get_random_samples_batch_from_loader(val_loader)
-                X, y = X.to(self.device), y.to(self.device)
+                X, y = X.to(self.__device), y.to(self.__device)
                 self.__predictor.write_prediction_to_tensorboard('Val', (X, y),
                                                                  self.writer, image_inverse_transform,
                                                                  self.epochs_completed,
@@ -366,18 +379,18 @@ class Learner:
                 model_file_name = "model_epoch_{}.pt".format(epoch)
                 self.save(model_file_name, save_optimizer_state=True, epoch=self.epochs_completed,
                           train_loss=train_loss, val_loss=val_loss)
-        
+
         # Save latest model at the end
         self.save("latest_model.pt", save_optimizer_state=True, epoch=self.epochs_completed,
                   train_loss=train_loss, val_loss=self.best_val_loss)
 
     def predict(self, loader):
-        predictions, targets = self.__predictor.predict(loader, use_gpu=str(self.device) == "cuda:0")
+        predictions, targets = self.__predictor.predict(loader, use_gpu=self.__device == "cuda")
         return predictions, targets
 
     def predict_class(self, loader):
         predicted_class, probability, targets = self.__predictor.predict_class(loader,
-                                                                               use_gpu=str(self.device) == "cuda:0")
+                                                                               use_gpu=self.__device == "cuda")
         return predicted_class, probability, targets
 
     def extract_features(self, loader, no_of_features, features_csv_file, iterations=1,
@@ -400,7 +413,7 @@ class Learner:
             for iteration in range(iterations):
                 print('Iteration:', iteration + 1)
                 for X, y in tqdm(loader, total=len(loader), desc='Feature Extraction'):
-                    X = X.to(self.device)
+                    X = X.to(self.__device)
                     feature_set = self.__model(X).cpu().numpy()
 
                     if target_known:
