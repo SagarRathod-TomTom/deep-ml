@@ -120,7 +120,8 @@ class MCC(torch.nn.Module):
             fn = false_negatives(indices, target)
 
         numerator = (tp * tn) - (fp * fn)
-        denominator = torch.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+        denominator = torch.sqrt(torch.tensor((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn),
+                                              dtype=torch.float))
 
         return numerator / (denominator + self.epsilon)
 
