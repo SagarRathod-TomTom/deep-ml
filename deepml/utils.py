@@ -50,7 +50,9 @@ def binarize(output: torch.FloatTensor, threshold: float = 0.50):
 
 def plot_images_with_title(image_title_generator, samples, cols=4, figsize=(10, 10), fontsize=14):
     """
-    Accepts generator that yields 
+    Plots images with colored title.
+    Accepts generator that yields triplet tuple (image, title, title color)
+
     :param image_title_generator:
     :param samples:
     :param cols:
