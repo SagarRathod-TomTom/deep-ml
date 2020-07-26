@@ -7,7 +7,7 @@ import torch
 import torchvision
 import torch.nn.functional as F
 
-from .utils import binarize, plot_images_with_title_generator, create_text_image, get_random_samples_batch_from_loader
+from .utils import binarize, plot_images_with_title, create_text_image, get_random_samples_batch_from_loader
 
 
 class Predictor(ABC):
@@ -192,7 +192,7 @@ class ImageRegressionPredictor(SimplePredictor):
                                       title_color)
                                      for index in range(x.shape[0]))
 
-            plot_images_with_title_generator(image_title_generator, samples=samples, cols=cols, figsize=figsize)
+            plot_images_with_title(image_title_generator, samples=samples, cols=cols, figsize=figsize)
 
     def transform_target(self, y):
         """
@@ -335,7 +335,7 @@ class ImageClassificationPredictor(SimplePredictor):
                                                               probabilities[index]))
                                      for index in range(x.shape[0]))
 
-            plot_images_with_title_generator(image_title_generator, samples=samples, cols=cols, figsize=figsize)
+            plot_images_with_title(image_title_generator, samples=samples, cols=cols, figsize=figsize)
 
     def write_prediction_to_tensorboard(self, tag, image_batch, writer, image_inverse_transform,
                                         global_step, img_size=224):
