@@ -1,18 +1,19 @@
 import setuptools
+import deepml
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="deepml",
-    version="1.0.1",
+    version=deepml.__version__,
     author="Sagar Rathod",
     author_email="sagar100rathod@gmail.com",
     description="Library for training deep neural nets in Pytorch.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/sagar-rathod/PytorchDeepML",
-    packages=setuptools.find_packages(include=["deepml"]),
+    packages=setuptools.find_packages(include=["deepml", "deepml.*"]),
     package_data={"deepml": ["resources/fonts/*.ttf"]},
     classifiers=[
         "Development Status :: 5 - Production/Stable",
