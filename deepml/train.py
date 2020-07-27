@@ -44,8 +44,8 @@ class Learner:
         if load_saved_model and model_file_name is not None:
             self.load_saved_model(os.path.join(self.model_save_path, model_file_name),
                                   load_optimizer_state)
-        self.__device = "cuda" if use_gpu else "cpu"
-        self.set_device(self.__device)
+        self.__device = "cpu"
+        self.set_device("cuda" if use_gpu else "cpu")
 
     def set_optimizer(self, optimizer):
 
@@ -95,7 +95,7 @@ class Learner:
 
     def save(self, model_file_name, save_optimizer_state=False, epoch=None, train_loss=None, val_loss=None):
         # Convert model into cpu before saving the model state
-        self.set_device("cpu")
+        self.__model.to("cpu")
         save_dict = {'model': self.__model.state_dict()}
 
         if save_optimizer_state:
@@ -117,7 +117,7 @@ class Learner:
         filepath = os.path.join(self.model_save_path, model_file_name)
         torch.save(save_dict, filepath)
 
-        self.set_device(self.__device)
+        self.__model.to(self.__device)
         return filepath
 
     def validate(self, criterion, loader, metrics=None):
@@ -257,7 +257,7 @@ class Learner:
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
 
-        self.set_device(self.__device)
+        self.__model.to(self.__device)
         criterion = criterion.to(self.__device)
 
         if self.__predictor is None:
