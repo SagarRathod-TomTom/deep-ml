@@ -1,4 +1,4 @@
-# PytorchDeepML
+# deep-ml
 
 
 This library is a wrapper around pytorch and useful for solving image classification and semantic
@@ -52,7 +52,7 @@ lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=4, gamma=0.1
 
 from deepml.train import Learner
 # instantiate learner class
-learner = Learner(model_arch, optimizer, 'net', use_gpu=True, classes=["class1", "class2"])
+learner = Learner(model_arch, optimizer, 'net', use_gpu=True, classes=["class1", "class2", "class3"])
 
 # Fit Learner
 learner.fit(criterion, train_loader=train_loader, val_loader=val_loader, epochs=10, lr_scheduler=lr_scheduler)
@@ -60,7 +60,7 @@ learner.fit(criterion, train_loader=train_loader, val_loader=val_loader, epochs=
 
 #### 3. Use tensorboard to visualize model loss and metrics.
 
-##### On Google Colab:
+##### On Google Colab or Jupyter Notebook:
 
 ```bash
 %load_ext tensorboard
@@ -71,6 +71,15 @@ learner.fit(criterion, train_loader=train_loader, val_loader=val_loader, epochs=
 tensorboard --logdir 'net'
 ```
 
+#### 4. Quickly see some samples predictions from data loader.
+```python
+learner.show_predictions(val_loader, samples=30, cols=6, figsize=(20, 20))
+```
+
+#### 5. Run prediction on data loader.
+```python
+predictions, targets = learner.predict(val_loader)
+```
 
 
 ###
