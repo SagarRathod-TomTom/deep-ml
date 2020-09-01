@@ -7,24 +7,53 @@ import torch
 import torchvision
 import torch.nn.functional as F
 
-from .utils import binarize, plot_images_with_title, create_text_image, get_random_samples_batch_from_loader
+from deepml.utils import binarize, plot_images_with_title, create_text_image, get_random_samples_batch_from_loader
 
 
 class Predictor(ABC):
 
-    def __init__(self, model: torch.nn.Module, model_save_path=None, model_file_name='best_val_model.pt',
-                 classes=None):
+    def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
+                 model_file_name='latest_model.pt', use_gpu=True):
+
         super(Predictor, self).__init__()
 
-        if model is None:
-            raise ValueError('Model cannot be None.')
+        assert isinstance(model, torch.nn.Module)
+        assert model_dir is not None
+        assert isinstance(model_file_name, str)
 
         self._model = model
-        self.classes = classes
+        self._device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
 
-        if model_save_path and os.path.exists(os.path.join(model_save_path, model_file_name)):
-            state_dict = torch.load(os.path.join(model_save_path, model_file_name))
+        self._model_dir = model_dir
+        self._model_file_name = model_file_name
+
+        os.makedirs(self.model_dir, exist_ok=True)
+        weights_file_path = os.path.join(self._model_dir, self._model_file_name)
+        if load_saved_model and os.path.exists(weights_file_path):
+            self.__load_model_weights(weights_file_path)
+
+    def __load_model_weights(self, weights_file_path):
+        if weights_file_path and os.path.exists(weights_file_path):
+            print('Loading Saved Model Weights.')
+            print(weights_file_path)
+            state_dict = torch.load(weights_file_path)
             self._model.load_state_dict(state_dict['model'])
+
+    @property
+    def model(self):
+        return self._model
+
+    @property
+    def device(self):
+        return self._device
+
+    @property
+    def model_dir(self):
+        return self._model_dir
+
+    @property
+    def model_file_name(self):
+        return self._model_file_name
 
     def transform_input(self, x, image_inverse_transform=None):
         """
@@ -47,11 +76,15 @@ class Predictor(ABC):
         pass
 
     @abstractmethod
-    def predict(self, loader, use_gpu=False):
+    def predict_batch(self, x):
         pass
 
     @abstractmethod
-    def predict_class(self, loader, use_gpu=False):
+    def predict(self, loader):
+        pass
+
+    @abstractmethod
+    def predict_class(self, loader):
         pass
 
     @abstractmethod
@@ -64,35 +97,36 @@ class Predictor(ABC):
         pass
 
 
-class SimplePredictor(Predictor):
+class NeuralNetPredictor(Predictor):
     """
-        Use this simple predictor class to avoid writing to tensorboard.
+        Use this simple predictor class for any deep learning task.
+        It avoids writing to tensorboard and does not apply any transformation
+        on input and output.
     """
 
-    def __init__(self, model: torch.nn.Module, model_save_path=None,
-                 model_file_name=None, classes=None):
-        super(SimplePredictor, self).__init__(model, model_save_path,
-                                              model_file_name, classes=classes)
+    def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
+                 model_file_name='latest_model.pt', use_gpu=True):
+        super(NeuralNetPredictor, self).__init__(model, model_dir, load_saved_model,
+                                                 model_file_name, use_gpu)
 
-    def predict(self, loader, use_gpu=False):
+    def predict_batch(self, x):
+        x = x.to(self._device)
+        return self._model(x)
+
+    def predict(self, loader):
         """
         Accepts torch data loader and performs prediction
         :param loader:
-        :param use_gpu: boolean indicating whether to use GPU
-        :return: triplet of torch.Tensor of (targets, predicted class index, probability)
+        :return: tuple of torch.Tensor of (prediction, targets)
         """
 
         assert loader is not None and len(loader) > 0
-
-        device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
-        self._model = self._model.to(device)
+        self._model = self._model.to(self._device)
         predictions = []
         targets = []
         with torch.no_grad():
-            for X, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
-                if use_gpu:
-                    X = X.to(device)
-                y_pred = self._model(X).cpu()
+            for x, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
+                y_pred = self.predict_batch(x).cpu()
                 predictions.append(y_pred)
                 targets.append(y)
 
@@ -101,7 +135,7 @@ class SimplePredictor(Predictor):
 
         return predictions, targets
 
-    def predict_class(self, loader, use_gpu=False):
+    def predict_class(self, loader):
         raise NotImplementedError()
 
     def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
@@ -118,29 +152,30 @@ class SimplePredictor(Predictor):
         pass
 
 
-class SemanticSegmentationPredictor(Predictor):
+class Segmentation(Predictor):
 
-    def __init__(self, model: torch.nn.Module, model_save_path=None,
-                 model_file_name=None, classes=None):
-        super(SemanticSegmentationPredictor, self).__init__(model, model_save_path,
-                                                            model_file_name, classes=classes)
+    def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
+                 model_file_name='latest_model.pt', use_gpu=True, classes=None):
+        super(Segmentation, self).__init__(model, model_dir, load_saved_model,
+                                           model_file_name, use_gpu)
+        self.classes = classes
 
-    def predict_one(self, input: torch.Tensor, use_gpu=False):
+    def predict_batch(self, x):
         raise NotImplementedError
 
-    def predict(self, loader, use_gpu=False):
+    def predict(self, loader):
         raise NotImplementedError()
 
-    def predict_class(self, loader, use_gpu=False):
+    def predict_class(self, loader):
         raise NotImplementedError()
 
     def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
         raise NotImplementedError()
 
-    def transform_target(self, y, classes=None):
+    def transform_target(self, y):
         raise NotImplementedError()
 
-    def transform_output(self, prediction, classes=None):
+    def transform_output(self, prediction):
         return binarize(prediction)
 
     def write_prediction_to_tensorboard(self, tag, image_batch, writer, image_inverse_transform,
@@ -148,18 +183,15 @@ class SemanticSegmentationPredictor(Predictor):
         raise NotImplementedError()
 
 
-class ImageRegressionPredictor(SimplePredictor):
+class ImageRegression(NeuralNetPredictor):
     """
-    The class useful for doing direct predictions in image classification problems.
+    The class useful to perform image regression.
     """
 
-    def __init__(self, model: torch.nn.Module, model_save_path=None,
-                 model_file_name=None, classes=None):
-        super(ImageRegressionPredictor, self).__init__(model, model_save_path,
-                                                       model_file_name, classes=classes)
-
-    def predict_class(self, loader, use_gpu=False):
-        raise NotImplementedError()
+    def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
+                 model_file_name='latest_model.pt', use_gpu=True):
+        super(ImageRegression, self).__init__(model, model_dir, load_saved_model,
+                                              model_file_name, use_gpu)
 
     def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
         """
@@ -172,12 +204,12 @@ class ImageRegressionPredictor(SimplePredictor):
         :return:
         """
 
-        self._model = self._model.to("cpu")
+        self._model = self._model.to(self._device)
         self._model.eval()
 
         with torch.no_grad():
             x, y = get_random_samples_batch_from_loader(loader, samples)
-            predictions = self._model(x)
+            predictions = self.predict_batch(x)
 
             x = self.transform_input(x, image_inverse_transform)
             # #BCHW --> #BHWC
@@ -232,7 +264,7 @@ class ImageRegressionPredictor(SimplePredictor):
         self._model.eval()
         with torch.no_grad():
             x, y = image_batch
-            predictions = self._model(x).cpu()
+            predictions = self.predict_batch(x).cpu()
 
             x, y = x.cpu(), y.cpu()
             x = self.transform_input(x, image_inverse_transform)
@@ -259,25 +291,26 @@ class ImageRegressionPredictor(SimplePredictor):
             writer.add_images(f'{tag}', torch.stack(output_images), global_step)
 
 
-class ImageClassificationPredictor(SimplePredictor):
+class ImageClassification(NeuralNetPredictor):
     """
-    The class useful for doing direct predictions in image classification problems.
+    The class useful for doing image classification.
     """
 
-    def __init__(self, model: torch.nn.Module, model_save_path=None,
-                 model_file_name=None, classes=None):
-        super(ImageClassificationPredictor, self).__init__(model, model_save_path,
-                                                           model_file_name, classes=classes)
+    def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
+                 model_file_name='latest_model.pt', use_gpu=True, classes=None):
+        super(ImageClassification, self).__init__(model, model_dir, load_saved_model,
+                                                  model_file_name, use_gpu)
+        self._classes = classes
 
-    def predict_class(self, loader, use_gpu=False):
-        predictions, targets = self.predict(loader, use_gpu)
+    def predict_class(self, loader):
+        predictions, targets = self.predict(loader)
         predicted_class, probability = self.transform_output(predictions)
         return predicted_class, probability, targets
 
     def transform_target(self, y):
-        if self.classes:
+        if self._classes:
             # if classes is not empty, replace target with actual class label
-            y = self.classes[y]
+            y = self._classes[y]
         return y
 
     def transform_output(self, predictions):
@@ -295,7 +328,7 @@ class ImageClassificationPredictor(SimplePredictor):
             # binary
             probability = torch.sigmoid(predictions)
             indices = torch.zeros_like(probability)
-            indices[probability > 0.5] = 1
+            indices[probability >= 0.5] = 1
 
         return indices, probability
 
@@ -310,12 +343,12 @@ class ImageClassificationPredictor(SimplePredictor):
         :return:
         """
 
-        self._model = self._model.to("cpu")
+        self._model = self._model.to(self._device)
         self._model.eval()
 
         with torch.no_grad():
             x, targets = get_random_samples_batch_from_loader(loader, samples)
-            predictions = self._model(x.to("cpu"))
+            predictions = self.predict_batch(x)
 
             x = self.transform_input(x, image_inverse_transform)
             # #BCHW --> #BHWC
@@ -355,11 +388,11 @@ class ImageClassificationPredictor(SimplePredictor):
 
         if isinstance(img_size, int):
             img_size = (img_size, img_size)
-
+        self._model = self._model.to(self._device)
         self._model.eval()
         with torch.no_grad():
             x, y = image_batch
-            predictions = self._model(x).cpu()
+            predictions = self.predict_batch(x).cpu()
 
             x = self.transform_input(x).cpu()
             class_indices, probabilities = self.transform_output(predictions)
