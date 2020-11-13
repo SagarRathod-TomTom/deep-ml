@@ -1,4 +1,3 @@
-
 import os
 
 import numpy as np
@@ -12,7 +11,8 @@ class ImageRowDataFrameDataset(Dataset):
         Each row is assume to be the flattened array of an image.
         Each row is then reshaped to the provided image_size.
     """
-    def __init__(self, dataframe:pd.DataFrame, target_column=None, image_size=(28, 28),
+
+    def __init__(self, dataframe: pd.DataFrame, target_column=None, image_size=(28, 28),
                  transform=None):
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.target_column = None
@@ -46,6 +46,7 @@ class ImageRowDataFrameDataset(Dataset):
 class ImageFileDataFrameDataset(Dataset):
     """ This class is useful for reading dataset of images for image classification/regression problem.
     """
+
     def __init__(self, dataframe, img_file_path_column='image', target_column=None,
                  image_dir=None, transforms=None, open_file_func=None):
 
@@ -108,21 +109,36 @@ class ImageListDataset(Dataset):
         return X, image_file
 
 
-class SemSegImageFileDataFrameDataset(Dataset):
+class SegmentationDataFrameDataset(Dataset):
     """ This class is useful for reading images and mask labels required for
         semantic segmentation problems.
 
         The image file and corresponding mask label file should have the same name,
         and should be stored in a provided mask directory.
 
-        You can provide custom open_file_func for reading image, by it uses PIL Image.open()
+        You can provide custom open_file_func for reading image, by default it uses PIL Image.open()
+        open_file_func should accept 2 parameters: image_file_path, mask_file path
+        and return image, mask
 
     """
-    def __init__(self, dataframe, image_dir, mask_dir, transforms=None, open_file_func=None):
+
+    def __init__(self, dataframe, image_dir, mask_dir, image_col='image',
+                 mask_col=None, albu_torch_transforms=None, open_file_func=None):
+
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.image_dir = image_dir
         self.mask_dir = mask_dir
-        self.transforms = transforms
+
+        assert os.path.exists(image_dir) and os.path.exists(mask_dir)
+
+        self.image_col = image_col
+        assert self.image_col in self.dataframe.columns
+
+        self.mask_col = mask_col
+        if self.mask_col is not None and self.mask_col not in self.dataframe.columns:
+            raise ValueError(f"{self.mask_col} does not exist in the dataframe")
+
+        self.albu_torch_transforms = albu_torch_transforms
         self.samples = self.dataframe.shape[0]
         self.open_file_func = open_file_func
 
@@ -130,16 +146,21 @@ class SemSegImageFileDataFrameDataset(Dataset):
         return self.samples
 
     def __getitem__(self, index):
-        image_file = self.dataframe.loc[index, 'image']
+
+        image_file = os.path.join(self.image_dir, self.dataframe.loc[index, self.image_col])
+
+        if self.mask_col is not None:
+            mask_file = os.path.join(self.mask_dir, self.dataframe.loc[index, self.mask_col])
+        else:
+            mask_file = os.path.join(self.mask_dir, self.dataframe.loc[index, self.image_col])
 
         if self.open_file_func is None:
-            image = Image.open(os.path.join(self.image_dir, image_file))
-            mask = Image.open(os.path.join(self.mask_dir, image_file))
+            image = Image.open(image_file)
+            mask = Image.open(mask_file)
         else:
-            image = self.open_file_func(os.path.join(self.image_dir, image_file))
-            mask = self.open_file_func(os.path.join(self.mask_dir, image_file))
+            image, mask = self.open_file_func(image_file, mask_file)
 
-        if self.transforms is not None:
-            image, mask = self.transforms(image=image, mask=mask)
+        if self.albu_torch_transforms is not None:
+            image, mask = self.albu_torch_transforms(image=image, mask=mask)
 
         return image, mask

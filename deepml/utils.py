@@ -68,6 +68,7 @@ def plot_images_with_title(image_title_generator, samples, cols=4, figsize=(10, 
         ax.set_title(title, color=mpl.rcParams['text.color'] if title_color is None else title_color)
         ax.title.set_fontsize(fontsize)
         plt.imshow(image)
+    plt.tight_layout()
 
 
 def plot_images(images, labels=None, cols=4, figsize=(10, 10), fontsize=14):
@@ -80,6 +81,7 @@ def plot_images(images, labels=None, cols=4, figsize=(10, 10), fontsize=14):
             ax.set_title(labels[index])
         ax.title.set_fontsize(fontsize)
         plt.imshow(image)
+    plt.tight_layout()
 
 
 def transform_target(target, classes=None):
@@ -126,10 +128,13 @@ def show_images_from_loader(loader, image_inverse_transform=None, samples=9, col
 
 def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10), title_color=None):
     files = os.listdir(img_dir)
-    samples = np.random.randint(0, len(img_dir), size=samples)
+    if samples < len(files):
+        samples = np.random.choice(files, size=samples, replace=False)
+    else:
+        samples = files
 
-    image_generator = ((Image.open(os.path.join(img_dir, files[index])), files[index], title_color)
-                       for index in samples)
+    image_generator = ((Image.open(os.path.join(img_dir, file)), file, title_color)
+                       for file in samples)
     plot_images_with_title(image_generator, len(samples), cols=cols, figsize=figsize)
 
 

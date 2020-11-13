@@ -2,12 +2,12 @@ import os
 from abc import ABC, abstractmethod
 
 import numpy as np
-from tqdm.auto import tqdm
 import torch
-import torchvision
 import torch.nn.functional as F
+import torchvision
+from tqdm.auto import tqdm
 
-from deepml.utils import binarize, plot_images_with_title, create_text_image, get_random_samples_batch_from_loader
+from deepml.utils import plot_images_with_title, create_text_image, get_random_samples_batch_from_loader, plot_images
 
 
 class Predictor(ABC):
@@ -92,7 +92,7 @@ class Predictor(ABC):
         pass
 
     @abstractmethod
-    def write_prediction_to_tensorboard(self, tag, image_batch, writer, image_inverse_transform,
+    def write_prediction_to_tensorboard(self, tag, loader, writer, image_inverse_transform,
                                         global_step, img_size=224):
         pass
 
@@ -147,40 +147,172 @@ class NeuralNetPredictor(Predictor):
     def transform_output(self, prediction):
         raise NotImplementedError()
 
-    def write_prediction_to_tensorboard(self, tag, image_batch, writer, image_inverse_transform,
+    def write_prediction_to_tensorboard(self, tag, loader, writer, image_inverse_transform,
                                         global_step, img_size=224):
         pass
 
 
-class Segmentation(Predictor):
+class Segmentation(NeuralNetPredictor):
+    """
+    This class is useful for binary and Multiclass Segmentation
+    """
 
     def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
-                 model_file_name='latest_model.pt', use_gpu=True, classes=None):
+                 model_file_name='latest_model.pt', use_gpu=True, classes=None, threshold=0.5):
         super(Segmentation, self).__init__(model, model_dir, load_saved_model,
                                            model_file_name, use_gpu)
+
+        assert isinstance(classes, int), "should be the number of classes"
+        assert classes > 1, "for binary segmentation task, it should be 2 classes"
+
         self.classes = classes
+        self.threshold = threshold
+
+        if self.classes == 2:
+            self.color_map = {0: 0, 1: 255}
+        else:
+            self.color_map = {0: [[0, 0, 0]]}
+            additional_colors = np.random.randint(0, 256, size=(self.classes - 1, 3))
+            for index, color in enumerate(additional_colors.tolist()):
+                self.color_map[index + 1] = color
 
     def predict_batch(self, x):
-        raise NotImplementedError
+        x = x.to(self._device)
+        pred = self._model(x)
 
-    def predict(self, loader):
-        raise NotImplementedError()
+        if isinstance(pred, dict) and 'out' in pred:
+            return pred['out']  # torchvision model's returns prediction in OrderedDict
+        else:
+            return pred
+
+    def predict(self, loader, **kwargs):
+        """
+        Accepts torch data loader and performs prediction
+        :param loader: torch.data loaders
+        :param save_dir : the output path to save predicted mask
+        :return: tuple of torch.Tensor of (prediction, targets)
+        """
+        assert loader is not None and len(loader) > 0
+        save_dir = kwargs.get('save_dir', None)
+
+        if save_dir is not None:
+            os.makedirs(save_dir, exist_ok=True)
+
+        predictions = []
+        targets = []
+
+        self._model = self._model.to(self._device)
+        with torch.no_grad():
+            for x, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
+                y_pred = self.predict_batch(x).cpu()
+
+                if save_dir is not None:
+                    output_mask = self.decode_segmentation_mask(self.transform_output(y_pred))
+                    self.save_image_batch(output_mask, save_dir, y.tolist())
+                else:
+                    predictions.append(y_pred)
+                    targets.append(y)
+
+        if len(predictions) > 0 and len(targets) > 0:
+            predictions = torch.cat(predictions)
+            targets = torch.cat(targets) if isinstance(targets[0], torch.Tensor) else np.hstack(targets).tolist()
+
+        return predictions, targets
+
+    def save_image_batch(self, output_mask, outdir, filenames):
+        assert output_mask.ndim == 4, "should be in the form of BCHW"
+
+        for i in range(output_mask.shape[0]):
+            image = torchvision.transforms.functional.to_pil_image(output_mask[i])
+            image.save(os.path.join(outdir, filenames[i]))
 
     def predict_class(self, loader):
         raise NotImplementedError()
 
-    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
-        raise NotImplementedError()
+    def show_predictions(self, loader, image_inverse_transform=None, samples=4, cols=3, figsize=(16, 16)):
+        self._model = self._model.to(self._device)
+        self._model.eval()
+
+        with torch.no_grad():
+            x, targets = get_random_samples_batch_from_loader(loader, samples)
+            predictions = self.predict_batch(x).cpu()
+
+            x = self.transform_input(x, image_inverse_transform)
+            target_mask = self.decode_segmentation_mask(targets)
+            class_indices = self.transform_output(predictions)
+            output_mask = self.decode_segmentation_mask(class_indices)
+
+            # BCHW --> #BHWC
+            x = x.permute([0, 2, 3, 1])
+            target_mask = target_mask.permute([0, 2, 3, 1])
+            output_mask = output_mask.permute([0, 2, 3, 1])
+
+            images = []
+            for i in range(x.shape[0]):
+                images.extend([x[i], target_mask[i], output_mask[i]])
+
+            image_titles = ["Input", "Target", "Prediction"] * x.shape[0]
+            plot_images(images, image_titles, cols=cols, figsize=figsize, fontsize=12)
+        return x, class_indices
 
     def transform_target(self, y):
-        raise NotImplementedError()
+        return self.decode_segmentation_mask(y)
 
-    def transform_output(self, prediction):
-        return binarize(prediction)
+    def transform_output(self, predictions):
 
-    def write_prediction_to_tensorboard(self, tag, image_batch, writer, image_inverse_transform,
+        assert predictions.ndim == 4  # B,C,H,W
+
+        if predictions.shape[1] == 1:
+            # Binary
+            probability = torch.sigmoid(predictions)
+            class_indices = torch.zeros_like(probability)
+            class_indices[probability >= self.threshold] = 1
+        else:
+            # Multiclass
+            probability = torch.softmax(predictions, dim=1)
+            class_indices = torch.argmax(probability, dim=1)
+
+        return class_indices
+
+    def decode_segmentation_mask(self, class_indices):
+        assert class_indices.ndim == 3  # B,H,W
+
+        decoded_images = []
+        out_channel = 3 if self.classes > 2 else 1
+
+        # For each image in the batch
+        for i in range(class_indices.shape[0]):
+            output_mask = np.zeros((*class_indices[i].shape, out_channel), dtype=np.uint8)  # H,W, C
+            for label in class_indices[i].unique():
+                idx = class_indices[i] == label
+                output_mask[idx] = self.color_map[label.item()]
+            decoded_images.append(torch.from_numpy(output_mask.transpose(2, 0, 1)))
+
+        return torch.stack(decoded_images)
+
+    def write_prediction_to_tensorboard(self, tag, loader, writer, image_inverse_transform,
                                         global_step, img_size=224):
-        raise NotImplementedError()
+
+        self._model = self._model.to(self._device)
+        self._model.eval()
+
+        with torch.no_grad():
+            x, targets = get_random_samples_batch_from_loader(loader)
+            predictions = self.predict_batch(x).cpu()
+
+            x = self.transform_input(x, image_inverse_transform)
+            target_mask = self.decode_segmentation_mask(targets)
+            class_indices = self.transform_output(predictions)
+            output_mask = self.decode_segmentation_mask(class_indices)
+
+            target_mask = target_mask.to(x.dtype)
+            output_mask = output_mask.to(x.dtype)
+
+            images = []
+            for i in range(x.shape[0]):
+                images.extend([x[i], target_mask[i], output_mask[i]])
+
+            writer.add_images(tag, torch.stack(images), global_step)
 
 
 class ImageRegression(NeuralNetPredictor):
@@ -348,7 +480,7 @@ class ImageClassification(NeuralNetPredictor):
 
         with torch.no_grad():
             x, targets = get_random_samples_batch_from_loader(loader, samples)
-            predictions = self.predict_batch(x)
+            predictions = self.predict_batch(x).cpu()
 
             x = self.transform_input(x, image_inverse_transform)
             # #BCHW --> #BHWC
@@ -370,13 +502,13 @@ class ImageClassification(NeuralNetPredictor):
 
             plot_images_with_title(image_title_generator, samples=samples, cols=cols, figsize=figsize)
 
-    def write_prediction_to_tensorboard(self, tag, image_batch, writer, image_inverse_transform,
+    def write_prediction_to_tensorboard(self, tag, loader, writer, image_inverse_transform,
                                         global_step, img_size=224):
         """
         Writes prediction to TensorBoard
 
         :param tag: unique tag
-        :param image_batch: input image batch with corresponding target (X,y)
+        :param loader: the torch data loader
         :param writer: tensorboard writer object
         :param image_inverse_transform: reverse image transform
         :param global_step: the epoch value
@@ -391,7 +523,7 @@ class ImageClassification(NeuralNetPredictor):
         self._model = self._model.to(self._device)
         self._model.eval()
         with torch.no_grad():
-            x, y = image_batch
+            x, targets = get_random_samples_batch_from_loader(loader)
             predictions = self.predict_batch(x).cpu()
 
             x = self.transform_input(x).cpu()
@@ -405,7 +537,7 @@ class ImageClassification(NeuralNetPredictor):
             text = '{ground_truth}\n{predicted_class}, {probability}'
             output_images = []
             for index in range(x.shape[0]):
-                ground_truth = self.transform_target(y[index])
+                ground_truth = self.transform_target(targets[index])
                 predicted_class = self.transform_target(class_indices[index])
                 probability = round(probabilities[index].item(), 2)
 

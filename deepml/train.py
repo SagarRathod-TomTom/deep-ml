@@ -7,7 +7,7 @@ import torch
 from tqdm.auto import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
-from deepml.predict import Predictor
+from deepml.tasks import Predictor
 from deepml import utils
 
 
@@ -292,8 +292,7 @@ class Learner:
             self.epochs_completed = self.epochs_completed + 1
 
             # Write some sample training images to tensorboard
-            x, y = utils.get_random_samples_batch_from_loader(train_loader)
-            self.__predictor.write_prediction_to_tensorboard('Train', (x, y),
+            self.__predictor.write_prediction_to_tensorboard('Train', train_loader,
                                                              self.writer, image_inverse_transform,
                                                              self.epochs_completed, img_size=tboard_img_size)
 
@@ -307,9 +306,7 @@ class Learner:
                 self.__write_metrics_to_tensorboard('Val', self.epochs_completed)
 
                 # write random val images to tensorboard
-                x, y = utils.get_random_samples_batch_from_loader(val_loader)
-                x, y = x.to(self.__device), y.to(self.__device)
-                self.__predictor.write_prediction_to_tensorboard('Val', (x, y),
+                self.__predictor.write_prediction_to_tensorboard('Val', val_loader,
                                                                  self.writer, image_inverse_transform,
                                                                  self.epochs_completed,
                                                                  img_size=tboard_img_size)
