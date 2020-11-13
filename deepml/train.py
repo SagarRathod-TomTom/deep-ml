@@ -228,7 +228,10 @@ class Learner:
         elif isinstance(temp_x, list): # list of torch tensors
             temp_x = [x.to(self.__device) for x in temp_x]
 
-        self.writer.add_graph(self.__model, temp_x)
+        try:
+            self.writer.add_graph(self.__model, temp_x)
+        except Exception as e:
+            print("Warning: Failed to write graph to tensorboard.")
 
         # Check valid metrics types
         if metrics:
