@@ -1,5 +1,9 @@
 # deep-ml
 
+![Licence](https://img.shields.io/badge/License-MIT-green)
+![Python](https://img.shields.io/badge/Python-3.6%2B-orange)
+[![Downloads](https://static.pepy.tech/personalized-badge/deepml?period=total&units=international_system&left_color=black&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/deepml)
+![Contributions welcome](https://img.shields.io/badge/Contributions-welcome-yellow)
 
 This library is a wrapper around pytorch and useful for solving image classification and semantic
 segmentation problems.
