@@ -7,7 +7,8 @@ import torch.nn.functional as F
 import torchvision
 from tqdm.auto import tqdm
 
-from deepml.utils import plot_images_with_title, create_text_image, get_random_samples_batch_from_loader, plot_images
+from deepml.utils import create_text_image, get_random_samples_batch_from_loader
+from deepml.visualize import plot_images_with_title, plot_images
 
 
 class Predictor(ABC):

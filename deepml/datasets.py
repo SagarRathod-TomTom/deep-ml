@@ -43,15 +43,15 @@ class ImageRowDataFrameDataset(Dataset):
         return self.samples
 
 
-class ImageFileDataFrameDataset(Dataset):
+class ImageDataFrameDataset(Dataset):
     """ This class is useful for reading dataset of images for image classification/regression problem.
     """
 
-    def __init__(self, dataframe, img_file_path_column='image', target_column=None,
+    def __init__(self, dataframe, image_file_name_column='image', target_column=None,
                  image_dir=None, transforms=None, open_file_func=None):
 
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
-        self.img_file_path_column = img_file_path_column
+        self.img_file_path_column = image_file_name_column
         self.target_column = target_column
         self.image_dir = image_dir
         self.transforms = transforms
