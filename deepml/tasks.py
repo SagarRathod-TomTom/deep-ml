@@ -155,7 +155,7 @@ class NeuralNetPredictor(Predictor):
 
 class Segmentation(NeuralNetPredictor):
     """
-    This class is useful for binary and Multiclass Segmentation
+    This class is useful for binary and Multiclass Segmentation.
     """
 
     def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
@@ -190,7 +190,7 @@ class Segmentation(NeuralNetPredictor):
         """
         Accepts torch data loader and performs prediction
         :param loader: torch.data loaders
-        :param save_dir : the output path to save predicted mask
+        :param save_dir : the output path to save predicted segmentation mask
         :return: tuple of torch.Tensor of (prediction, targets)
         """
         assert loader is not None and len(loader) > 0
@@ -209,7 +209,7 @@ class Segmentation(NeuralNetPredictor):
 
                 if save_dir is not None:
                     output_mask = self.decode_segmentation_mask(self.transform_output(y_pred))
-                    self.save_image_batch(output_mask, save_dir, y.tolist())
+                    Segmentation.save_image_batch(output_mask, save_dir, y.tolist())
                 else:
                     predictions.append(y_pred)
                     targets.append(y)
@@ -220,7 +220,8 @@ class Segmentation(NeuralNetPredictor):
 
         return predictions, targets
 
-    def save_image_batch(self, output_mask, outdir, filenames):
+    @staticmethod
+    def save_image_batch(output_mask, outdir, filenames):
         assert output_mask.ndim == 4, "should be in the form of BCHW"
 
         for i in range(output_mask.shape[0]):
@@ -426,7 +427,7 @@ class ImageRegression(NeuralNetPredictor):
 
 class ImageClassification(NeuralNetPredictor):
     """
-    The class useful for doing image classification.
+    The class useful for image classification task.
     """
 
     def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
