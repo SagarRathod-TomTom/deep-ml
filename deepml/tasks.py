@@ -376,13 +376,13 @@ class ImageRegression(NeuralNetPredictor):
         """
         return round(prediction.item(), 2)
 
-    def write_prediction_to_tensorboard(self, tag, image_batch, writer, image_inverse_transform,
+    def write_prediction_to_tensorboard(self, tag, loader, writer, image_inverse_transform,
                                         global_step, img_size=224):
         """
         Writes prediction to TensorBoard
 
         :param tag: unique tag
-        :param image_batch: input image batch with corresponding target (X,y)
+        :param loader: the torch data loader
         :param writer: tensorboard writer object
         :param image_inverse_transform: reverse image transform
         :param global_step: the epoch value
@@ -395,12 +395,13 @@ class ImageRegression(NeuralNetPredictor):
         if isinstance(img_size, int):
             img_size = (img_size, img_size)
 
+        self._model = self._model.to(self._device)
         self._model.eval()
         with torch.no_grad():
-            x, y = image_batch
+            x, targets = get_random_samples_batch_from_loader(loader)
             predictions = self.predict_batch(x).cpu()
 
-            x, y = x.cpu(), y.cpu()
+            x, y = x.cpu(), targets.cpu()
             x = self.transform_input(x, image_inverse_transform)
             input_img_size = tuple(x.shape[-2:])
 
@@ -423,6 +424,9 @@ class ImageRegression(NeuralNetPredictor):
                 output_images.append(to_tensor(content_image))
 
             writer.add_images(f'{tag}', torch.stack(output_images), global_step)
+
+    def predict_class(self, loader):
+        raise NotImplementedError()
 
 
 class ImageClassification(NeuralNetPredictor):
