@@ -82,11 +82,19 @@ def get_random_samples_batch_from_loader(loader, samples=None):
 
     if len(loader) == 0:
         raise ValueError('Loader is empty')
+    return get_random_samples_batch_from_dataset(loader.dataset,
+                                                 loader.batch_size if samples is None else samples)
 
-    indexes = np.random.randint(0, len(loader.dataset), loader.batch_size if samples is None else samples)
+
+def get_random_samples_batch_from_dataset(dataset, samples=8):
+
+    if len(dataset) == 0:
+        raise ValueError('Dataset is empty')
+
+    indexes = np.random.randint(0, len(dataset), samples)
     samples, targets = [], []
     for index in indexes:
-        x, y = loader.dataset[index]
+        x, y = dataset[index]
         samples.append(x)
         targets.append(y if isinstance(y, torch.Tensor) else torch.tensor(y))
 

@@ -4,15 +4,15 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from deepml.utils import get_random_samples_batch_from_loader, transform_input, transform_target
+from deepml.utils import get_random_samples_batch_from_loader, transform_input, transform_target, \
+    get_random_samples_batch_from_dataset
 
 
 def plot_images(images, labels=None, cols=4, figsize=(10, 10), fontsize=14):
-
     plt.figure(figsize=figsize)
     rows = int(np.ceil(len(images) / cols))
     for index, image in enumerate(images):
-        ax = plt.subplot(rows, cols, index + 1,  xticks=[], yticks=[])
+        ax = plt.subplot(rows, cols, index + 1, xticks=[], yticks=[])
         if labels:
             ax.set_title(labels[index])
         ax.title.set_fontsize(fontsize)
@@ -36,7 +36,7 @@ def plot_images_with_title(image_title_generator, samples, cols=4, figsize=(10, 
     plt.figure(figsize=figsize)
     rows = int(np.ceil(samples / cols))
     for index, (image, title, title_color) in enumerate(image_title_generator):
-        ax = plt.subplot(rows, cols, index + 1,  xticks=[], yticks=[])
+        ax = plt.subplot(rows, cols, index + 1, xticks=[], yticks=[])
         ax.set_title(title, color=mpl.rcParams['text.color'] if title_color is None else title_color)
         ax.title.set_fontsize(fontsize)
         plt.imshow(image)
@@ -53,6 +53,19 @@ def show_images_from_loader(loader, image_inverse_transform=None, samples=9, col
     plot_images_with_title(image_title_generator, samples=samples, cols=cols, figsize=figsize)
 
 
+def show_images_from_dataset(dataset, image_inverse_transform=None, samples=9, cols=3, figsize=(5, 5),
+                             classes=None, title_color=None):
+    x, y = get_random_samples_batch_from_dataset(dataset, samples=samples)
+    x = transform_input(x, image_inverse_transform)
+
+    if not classes and hasattr(dataset, 'classes'):
+        classes = dataset.classes
+
+    image_title_generator = ((x[index], transform_target(y[index], classes),
+                              title_color) for index in range(x.shape[0]))
+    plot_images_with_title(image_title_generator, samples=samples, cols=cols, figsize=figsize)
+
+
 def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10), title_color=None):
     files = os.listdir(img_dir)
     if samples < len(files):
@@ -62,4 +75,14 @@ def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10), title_
 
     image_generator = ((Image.open(os.path.join(img_dir, file)), file, title_color)
                        for file in samples)
+    plot_images_with_title(image_generator, len(samples), cols=cols, figsize=figsize)
+
+
+def show_images_from_dataframe(dataframe, img_dir=None, image_file_name_column="image",
+                               label_column='label', samples=9, cols=3, figsize=(10, 10),
+                               title_color=None):
+    samples = dataframe.sample(samples)
+    image_generator = ((Image.open(os.path.join(img_dir, row_data[image_file_name_column])),
+                        row_data[label_column], title_color)
+                       for _, row_data in samples.iterrows())
     plot_images_with_title(image_generator, len(samples), cols=cols, figsize=figsize)
