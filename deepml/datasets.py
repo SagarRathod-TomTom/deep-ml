@@ -3,10 +3,10 @@ import os
 import numpy as np
 import pandas as pd
 from PIL import Image
-from torch.utils.data import Dataset
+import torch
 
 
-class ImageRowDataFrameDataset(Dataset):
+class ImageRowDataFrameDataset(torch.utils.data.Dataset):
     """ Class useful for reading images from a dataframe.
         Each row is assume to be the flattened array of an image.
         Each row is then reshaped to the provided image_size.
@@ -43,16 +43,16 @@ class ImageRowDataFrameDataset(Dataset):
         return self.samples
 
 
-class ImageDataFrameDataset(Dataset):
+class ImageDataFrameDataset(torch.utils.data.Dataset):
     """ This class is useful for reading dataset of images for image classification/regression problem.
     """
 
-    def __init__(self, dataframe, image_file_name_column='image', target_column=None,
+    def __init__(self, dataframe, image_file_name_column='image', target_columns=None,
                  image_dir=None, transforms=None, open_file_func=None):
 
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
-        self.img_file_path_column = image_file_name_column
-        self.target_column = target_column
+        self.image_file_name_column = image_file_name_column
+        self.target_columns = target_columns
         self.image_dir = image_dir
         self.transforms = transforms
         self.samples = self.dataframe.shape[0]
@@ -63,9 +63,9 @@ class ImageDataFrameDataset(Dataset):
 
     def __getitem__(self, index):
 
-        image_file = self.dataframe.loc[index, self.img_file_path_column]
+        image_file = self.dataframe.loc[index, self.image_file_name_column]
 
-        if self.image_dir is not None:
+        if self.image_dir:
             image_file = os.path.join(self.image_dir, image_file)
 
         if self.open_file_func is None:
@@ -74,8 +74,8 @@ class ImageDataFrameDataset(Dataset):
             X = self.open_file_func(image_file)
 
         y = 0
-        if self.target_column is not None:
-            y = self.dataframe.loc[index, self.target_column]
+        if self.target_columns:
+            y = torch.tensor(self.dataframe.loc[index, self.target_columns], dtype=torch.float)
 
         if self.transforms is not None:
             X = self.transforms(X)
@@ -83,7 +83,7 @@ class ImageDataFrameDataset(Dataset):
         return X, y
 
 
-class ImageListDataset(Dataset):
+class ImageListDataset(torch.utils.data.Dataset):
 
     def __init__(self, image_dir, transforms=None, open_file_func=None):
 
@@ -109,7 +109,7 @@ class ImageListDataset(Dataset):
         return X, image_file
 
 
-class SegmentationDataFrameDataset(Dataset):
+class SegmentationDataFrameDataset(torch.utils.data.Dataset):
     """ This class is useful for reading images and mask labels required for
         semantic segmentation problems.
 
