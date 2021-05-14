@@ -1,6 +1,6 @@
 import os
 import csv
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import numpy as np
 import torch
@@ -27,6 +27,7 @@ class Learner:
         self.__criterion = criterion
         self.epochs_completed = 0
         self.best_val_loss = np.inf
+        self.history = defaultdict(list)
 
         os.makedirs(self.__model_dir, exist_ok=True)
         self.writer = SummaryWriter(os.path.join(self.__model_dir,
@@ -164,6 +165,11 @@ class Learner:
         for name, value in self.__metrics_dict.items():
             self.writer.add_scalar(f'{name}/{tag}', value, global_step)
 
+    def __collect_history(self, stage, loss):
+        self.history[f"{stage}_loss"].append(loss)
+        for name, value in self.__metrics_dict.items():
+            self.history[f"{stage}_{name}"].append(value)
+
     def __write_lr_to_tensorboard(self, global_step):
         # Write lr to tensor-board
         if len(self.__optimizer.param_groups) == 1:
@@ -295,21 +301,23 @@ class Learner:
             self.epochs_completed = self.epochs_completed + 1
 
             # Write some sample training images to tensorboard
-            self.__predictor.write_prediction_to_tensorboard('Train', train_loader,
+            self.__predictor.write_prediction_to_tensorboard('train', train_loader,
                                                              self.writer, image_inverse_transform,
                                                              self.epochs_completed, img_size=tboard_img_size)
 
             train_loss = self.__metrics_dict['loss']
-            self.__write_metrics_to_tensorboard('Train', self.epochs_completed)
+            self.__write_metrics_to_tensorboard('train', self.epochs_completed)
+            self.__collect_history('train', train_loss)
 
             val_loss = np.inf
             if val_loader is not None:
                 self.validate(self.__criterion, val_loader, metrics)
                 val_loss = self.__metrics_dict['loss']
-                self.__write_metrics_to_tensorboard('Val', self.epochs_completed)
+                self.__write_metrics_to_tensorboard('val', self.epochs_completed)
+                self.__collect_history('val', val_loss)
 
                 # write random val images to tensorboard
-                self.__predictor.write_prediction_to_tensorboard('Val', val_loader,
+                self.__predictor.write_prediction_to_tensorboard('val', val_loader,
                                                                  self.writer, image_inverse_transform,
                                                                  self.epochs_completed,
                                                                  img_size=tboard_img_size)
