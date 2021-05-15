@@ -53,13 +53,22 @@ def transform_target(target, classes=None):
     :param classes:
     :return:
     """
-    if target is not None:
-        target = target.item() if type(target) == torch.Tensor else target
-        if type(target) == float and classes is None:
+
+    if isinstance(target, torch.Tensor):
+
+        if target.ndim == 1:
+            target = target.item() if target.shape[0] == 1 else target
+
+        if target.shape[0] == 1 and classes is None:
             target = round(target, 2)
-        elif type(classes) in (list, tuple) and classes:
-            # if classes is not empty, replace target with actual class label
+
+        if target.shape[0] == 1 and type(classes) in (list, tuple) and classes:
             target = classes[target]
+
+        # Multi-label
+        if target.shape[0] > 1 and type(classes) in (list, tuple) and classes:
+            target = ",".join([classes[index] for index, value in enumerate(target) if value])
+
     return target
 
 

@@ -307,14 +307,14 @@ class Learner:
             train_loss = self.__metrics_dict['loss']
             self.__write_metrics_to_tensorboard('train', self.epochs_completed)
             self.__write_history('train')
-
+            message = f"Training Loss: {train_loss:.4f} "
             val_loss = np.inf
             if val_loader is not None:
                 self.validate(self.__criterion, val_loader, metrics)
                 val_loss = self.__metrics_dict['loss']
                 self.__write_metrics_to_tensorboard('val', self.epochs_completed)
                 self.__write_history('val')
-
+                message = message + f"Validation Loss: {val_loss:.4f}"
                 # write random val images to tensorboard
                 self.__predictor.write_prediction_to_tensorboard('val', val_loader,
                                                                  self.writer, image_inverse_transform,
@@ -330,14 +330,14 @@ class Learner:
                               train_loss=train_loss,
                               val_loss=val_loss)
 
-            if lr_scheduler is not None and lr_scheduler_step_policy == "epoch":
-                if val_loader is not None and isinstance(lr_scheduler,
-                                                         torch.optim.lr_scheduler.ReduceLROnPlateau):
+            if lr_scheduler and lr_scheduler_step_policy == "epoch":
+                if val_loader and isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                     lr_scheduler.step(val_loss)
                 else:
                     lr_scheduler.step()
 
             self.writer.flush()
+            print(message)
             if epoch % save_model_after_every_epoch == 0:
                 model_file_name = "model_epoch_{}.pt".format(epoch)
                 self.save(model_file_name, save_optimizer_state=True, epoch=self.epochs_completed,

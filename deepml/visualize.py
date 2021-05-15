@@ -48,6 +48,9 @@ def show_images_from_loader(loader, image_inverse_transform=None, samples=9, col
     x, y = get_random_samples_batch_from_loader(loader, samples=samples)
     x = transform_input(x, image_inverse_transform)
 
+    if not classes and hasattr(loader.dataset, 'classes'):
+        classes = loader.dataset.classes
+
     image_title_generator = ((x[index], transform_target(y[index], classes),
                               title_color) for index in range(x.shape[0]))
     plot_images_with_title(image_title_generator, samples=samples, cols=cols, figsize=figsize)

@@ -466,7 +466,7 @@ class ImageClassification(NeuralNetPredictor):
             # binary
             probability = torch.sigmoid(predictions)
             indices = torch.zeros_like(probability)
-            indices[probability >= 0.5] = 1
+            indices[probability > 0.5] = 1
 
         return indices, probability
 
@@ -560,3 +560,39 @@ class ImageClassification(NeuralNetPredictor):
                 output_images.append(to_tensor(content_image))
 
             writer.add_images(f'{tag}', torch.stack(output_images), global_step)
+
+
+class MultiLabelImageClassification(ImageClassification):
+    """
+    The class useful for multi label image classification task.
+    """
+
+    def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
+                 model_file_name='latest_model.pt', use_gpu=True, classes=None):
+        super(ImageClassification, self).__init__(model, model_dir, load_saved_model,
+                                                  model_file_name, use_gpu)
+        self._classes = classes
+
+    def predict_class(self, loader):
+        predictions, targets = self.predict(loader)
+        predicted_class, probability = self.transform_output(predictions)
+        return predicted_class, probability, targets
+
+    def transform_target(self, y):
+        if self._classes:
+            # if classes is not empty, replace target with actual class label
+            y = ", ".join([self._classes[index] for index, value in enumerate(y) if value])
+        return y
+
+    def transform_output(self, predictions):
+        """
+        Accepts batch of predictions and applies either sigmoid or softmax based on
+        the type of classification
+        :param predictions:
+        :return:
+        """
+        probability = torch.sigmoid(predictions)
+        indices = torch.zeros_like(probability)
+        indices[probability > 0.5] = 1
+
+        return indices, probability
