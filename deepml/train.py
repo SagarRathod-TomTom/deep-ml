@@ -165,8 +165,7 @@ class Learner:
         for name, value in self.__metrics_dict.items():
             self.writer.add_scalar(f'{name}/{tag}', value, global_step)
 
-    def __collect_history(self, stage, loss):
-        self.history[f"{stage}_loss"].append(loss)
+    def __write_history(self, stage):
         for name, value in self.__metrics_dict.items():
             self.history[f"{stage}_{name}"].append(value)
 
@@ -307,14 +306,14 @@ class Learner:
 
             train_loss = self.__metrics_dict['loss']
             self.__write_metrics_to_tensorboard('train', self.epochs_completed)
-            self.__collect_history('train', train_loss)
+            self.__write_history('train')
 
             val_loss = np.inf
             if val_loader is not None:
                 self.validate(self.__criterion, val_loader, metrics)
                 val_loss = self.__metrics_dict['loss']
                 self.__write_metrics_to_tensorboard('val', self.epochs_completed)
-                self.__collect_history('val', val_loss)
+                self.__write_history('val')
 
                 # write random val images to tensorboard
                 self.__predictor.write_prediction_to_tensorboard('val', val_loader,
