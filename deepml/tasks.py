@@ -35,9 +35,9 @@ class Predictor(ABC):
 
     def __load_model_weights(self, weights_file_path):
         if weights_file_path and os.path.exists(weights_file_path):
-            print('Loading Saved Model Weights.')
-            print(weights_file_path)
-            state_dict = torch.load(weights_file_path)
+            print(f'Loading Saved Model Weights: {weights_file_path}')
+            state_dict = (torch.load(weights_file_path) if torch.cuda.is_available() else
+                          torch.load(weights_file_path, map_location=torch.device('cpu')))
             self._model.load_state_dict(state_dict['model'])
 
     @property
