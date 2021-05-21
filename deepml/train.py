@@ -129,7 +129,7 @@ class Learner:
                 self.__update_metrics(outputs, y, metrics, batch_index + 1)
 
                 bar.update(1)
-                bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
+                bar.set_postfix({name: f'{round(value, 4)}' for name, value in self.__metrics_dict.items()})
 
         return self.__metrics_dict
 
@@ -233,10 +233,12 @@ class Learner:
         elif isinstance(temp_x, list): # list of torch tensors
             temp_x = [x.to(self.__device) for x in temp_x]
 
-        try:
-            self.writer.add_graph(self.__model, temp_x)
-        except Exception as e:
-            print("Warning: Failed to write graph to tensorboard.")
+        with torch.no_grad():
+            self.__model.eval()
+            try:
+                self.writer.add_graph(self.__model, temp_x)
+            except Exception as e:
+                print("Warning: Failed to write graph to tensorboard.")
 
         # Check valid metrics types
         if metrics:
@@ -295,7 +297,7 @@ class Learner:
                 # Update metrics
                 self.__update_metrics(outputs, y, metrics, step)
                 bar.update(1)
-                bar.set_postfix({name: f'{round(value, 2)}' for name, value in self.__metrics_dict.items()})
+                bar.set_postfix({name: f'{round(value, 4)}' for name, value in self.__metrics_dict.items()})
 
             self.epochs_completed = self.epochs_completed + 1
 
@@ -314,7 +316,7 @@ class Learner:
                 val_loss = self.__metrics_dict['loss']
                 self.__write_metrics_to_tensorboard('val', self.epochs_completed)
                 self.__write_history('val')
-                message = message + f"Validation Loss: {val_loss:.4f}"
+                message = message + f"Validation Loss: {val_loss:.4f} "
                 # write random val images to tensorboard
                 self.__predictor.write_prediction_to_tensorboard('val', val_loader,
                                                                  self.writer, image_inverse_transform,
@@ -322,7 +324,7 @@ class Learner:
                                                                  img_size=tboard_img_size)
                 # Save best validation model
                 if val_loss < self.best_val_loss:
-                    print("Saving best validation model.")
+                    message = message + "Saving best validation model"
                     self.best_val_loss = val_loss
                     self.save('best_val_model.pt',
                               save_optimizer_state=True,
