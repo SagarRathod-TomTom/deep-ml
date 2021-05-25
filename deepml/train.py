@@ -179,6 +179,21 @@ class Learner:
                 self.writer.add_scalar(f'learning_rate/param_group_{index}', param_group['lr'],
                                        global_step)
 
+    def __write_graph_to_tensorboard(self, loader):
+        # Write graph to tensorboard
+        temp_x, _ = utils.get_random_samples_batch_from_loader(loader)
+        if isinstance(temp_x, torch.Tensor):
+            temp_x = temp_x.to(self.__device)
+        elif isinstance(temp_x, list):  # list of torch tensors
+            temp_x = [x.to(self.__device) for x in temp_x]
+
+        with torch.no_grad():
+            self.__model.eval()
+            try:
+                self.writer.add_graph(self.__model, temp_x)
+            except Exception as e:
+                print("Warning: Failed to write graph to tensorboard.")
+
     def fit(self, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
             save_model_after_every_epoch=5, lr_scheduler=None, lr_scheduler_step_policy='epoch',
             metrics=None, image_inverse_transform=None, tboard_img_size=224):
@@ -227,18 +242,7 @@ class Learner:
         self.__criterion = self.__criterion.to(self.__device)
 
         # Write graph to tensorboard
-        temp_x, _ = utils.get_random_samples_batch_from_loader(val_loader)
-        if isinstance(temp_x, torch.Tensor):
-            temp_x = temp_x.to(self.__device)
-        elif isinstance(temp_x, list): # list of torch tensors
-            temp_x = [x.to(self.__device) for x in temp_x]
-
-        with torch.no_grad():
-            self.__model.eval()
-            try:
-                self.writer.add_graph(self.__model, temp_x)
-            except Exception as e:
-                print("Warning: Failed to write graph to tensorboard.")
+        self.__write_graph_to_tensorboard(val_loader)
 
         # Check valid metrics types
         if metrics:
@@ -324,7 +328,7 @@ class Learner:
                                                                  img_size=tboard_img_size)
                 # Save best validation model
                 if val_loss < self.best_val_loss:
-                    message = message + "Saving best validation model"
+                    message = message + "[Saving best validation model]"
                     self.best_val_loss = val_loss
                     self.save('best_val_model.pt',
                               save_optimizer_state=True,
