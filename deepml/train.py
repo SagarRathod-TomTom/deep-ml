@@ -152,10 +152,6 @@ class Learner:
         if metrics is None:
             return
 
-        # Update metrics
-        outputs = outputs.to(self.__device)
-        targets = targets.to(self.__device)
-
         for metric_name, metric_instance in metrics:
             self.__metrics_dict[metric_name] = self.__metrics_dict[metric_name] + \
                                                ((metric_instance(outputs, targets).item() - self.__metrics_dict[
