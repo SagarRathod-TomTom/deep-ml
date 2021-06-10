@@ -119,7 +119,7 @@ class Learner:
                 y = y.to(self.__device)
                 outputs = self.__predictor.predict_batch(x)
 
-                if outputs.shape[1] == 1:
+                if isinstance(outputs, torch.Tensor) and outputs.shape[1] == 1:
                     y = y.view_as(outputs)
 
                 loss = criterion(outputs, y)
