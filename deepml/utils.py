@@ -59,15 +59,18 @@ def transform_target(target, classes=None):
         if target.ndim == 1:
             target = target.item() if target.shape[0] == 1 else target
 
-        if target.shape[0] == 1 and classes is None:
-            target = round(target, 2)
+        if target.ndim == 0 and classes is None:
+            return round(target.item(), 2)
 
         if target.shape[0] == 1 and type(classes) in (list, tuple) and classes:
-            target = classes[target]
+            return classes[target]
 
         # Multi-label
         if target.shape[0] > 1 and type(classes) in (list, tuple) and classes:
-            target = ",".join([classes[index] for index, value in enumerate(target) if value])
+            return ",".join([classes[index] for index, value in enumerate(target) if value])
+
+    elif isinstance(target, int) and classes:
+        target = classes[target]
 
     return target
 
@@ -105,6 +108,12 @@ def get_random_samples_batch_from_dataset(dataset, samples=8):
     for index in indexes:
         x, y = dataset[index]
         samples.append(x)
-        targets.append(y if isinstance(y, torch.Tensor) else torch.tensor(y))
+        targets.append(y)
 
-    return torch.stack(samples), torch.stack(targets)
+    if isinstance(samples[0], torch.Tensor):
+        samples = torch.stack(samples)
+
+    if isinstance(targets[0], torch.Tensor):
+        targets = torch.stack(targets)
+
+    return samples, targets

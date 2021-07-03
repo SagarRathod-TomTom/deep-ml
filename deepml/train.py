@@ -116,8 +116,10 @@ class Learner:
         with torch.no_grad():
             for batch_index, (x, y) in enumerate(loader):
 
-                y = y.to(self.__device)
                 outputs = self.__predictor.predict_batch(x)
+
+                if isinstance(y, torch.Tensor):
+                    y = y.to(self.__device)
 
                 if isinstance(outputs, torch.Tensor) and outputs.shape[1] == 1:
                     y = y.view_as(outputs)
@@ -279,10 +281,12 @@ class Learner:
 
                 outputs = self.__predictor.predict_batch(x)
 
+                if isinstance(y, torch.Tensor):
+                    y = y.to(self.__device)
+
                 if isinstance(outputs, torch.Tensor) and outputs.shape[1] == 1:
                     y = y.view_as(outputs)
 
-                y = y.to(self.__device)
                 loss = self.__criterion(outputs, y)
                 loss.backward()
 
@@ -388,7 +392,8 @@ class Learner:
                     fp.flush()
         fp.close()
 
-    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
+    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10),
+                         target_known=True):
 
         self.__predictor.show_predictions(loader, image_inverse_transform=image_inverse_transform,
-                                          samples=samples, cols=cols, figsize=figsize)
+                                          samples=samples, cols=cols, figsize=figsize, target_known=target_known)

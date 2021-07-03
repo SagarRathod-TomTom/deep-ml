@@ -30,7 +30,7 @@ class Predictor(ABC):
 
         os.makedirs(self.model_dir, exist_ok=True)
         weights_file_path = os.path.join(self._model_dir, self._model_file_name)
-        if load_saved_model and os.path.exists(weights_file_path):
+        if load_saved_model:
             self.__load_model_weights(weights_file_path)
 
     def __load_model_weights(self, weights_file_path):
@@ -89,7 +89,8 @@ class Predictor(ABC):
         pass
 
     @abstractmethod
-    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
+    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10),
+                         target_known=True):
         pass
 
     @abstractmethod
@@ -139,7 +140,8 @@ class NeuralNetPredictor(Predictor):
     def predict_class(self, loader):
         raise NotImplementedError()
 
-    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
+    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10),
+                         target_known=True):
         raise NotImplementedError()
 
     def transform_target(self, y):
@@ -231,7 +233,8 @@ class Segmentation(NeuralNetPredictor):
     def predict_class(self, loader):
         raise NotImplementedError()
 
-    def show_predictions(self, loader, image_inverse_transform=None, samples=4, cols=3, figsize=(16, 16)):
+    def show_predictions(self, loader, image_inverse_transform=None, samples=4, cols=3, figsize=(16, 16),
+                         target_known=True):
         self._model = self._model.to(self._device)
         self._model.eval()
 
@@ -277,7 +280,7 @@ class Segmentation(NeuralNetPredictor):
         return class_indices
 
     def decode_segmentation_mask(self, class_indices):
-        assert class_indices.ndim == 3  # B,H,W
+        assert class_indices.ndim == 3  # C,H,W
 
         decoded_images = []
         out_channel = 3 if self.classes > 2 else 1
@@ -327,7 +330,8 @@ class ImageRegression(NeuralNetPredictor):
         super(ImageRegression, self).__init__(model, model_dir, load_saved_model,
                                               model_file_name, use_gpu)
 
-    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
+    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10),
+                         target_known=True):
         """
         Shows predictions of random samples from loader. Draws matplotlib figure.
         :param loader: the torch data loader
@@ -335,6 +339,7 @@ class ImageRegression(NeuralNetPredictor):
         :param samples: the number of samples. Default is 9
         :param cols: the number of columns to use while displaying images. Default is 3
         :param figsize: the matplotlib figure size to use. Default is 10, 10
+        :param target_known: whether target is present in the torch dataset or not.
         :return:
         """
 
@@ -351,8 +356,11 @@ class ImageRegression(NeuralNetPredictor):
             title_color = None
 
             def create_title(y, prediction):
-                return f'Ground Truth={self.transform_target(y)}' \
-                       f'\nPrediction={self.transform_output(prediction)}'
+                prediction = self.transform_output(prediction)
+                if target_known:
+                    return f'Ground Truth={self.transform_target(y)}\nPrediction={prediction}'
+                else:
+                    return f"{y}\nPrediction={prediction}"
 
             image_title_generator = ((x[index], create_title(y[index], predictions[index]),
                                       title_color)
@@ -470,7 +478,30 @@ class ImageClassification(NeuralNetPredictor):
 
         return indices, probability
 
-    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10)):
+    def _create_title_for_display(self, target_class_index, predicted_class_index, predicted_probability,
+                                  target_known=True):
+        predicted_class = self.transform_target(predicted_class_index)
+        probability = round(predicted_probability.item(), 2)
+        if target_known:
+            target_class = self.transform_target(target_class_index)
+            title_color = "green" if predicted_class == target_class else "red"
+            return (f'Ground Truth={target_class}'
+                    f'\nPrediction={predicted_class}, '
+                    f'{probability}', title_color)
+        else:
+            return f'{target_class_index}\nPrediction={predicted_class}, {probability}', 'yellow'
+
+    def _create_output_image_for_tensorboard(self, target_class_index, predicted_class_index, predicted_probability,
+                                             img_size=(224, 224)):
+        ground_truth = self.transform_target(target_class_index)
+        predicted_class = self.transform_target(predicted_class_index)
+        probability = round(predicted_probability.item(), 2)
+        text_color = "green" if ground_truth == predicted_class else "red"
+        display_content = f'{ground_truth}\n{predicted_class}, {probability}'
+        return create_text_image(display_content, img_size=img_size, text_color=text_color)
+
+    def show_predictions(self, loader, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10),
+                         target_known=True):
         """
         Shows predictions of random samples from loader. Draws matplotlib figure.
         :param loader: the torch data loader
@@ -478,6 +509,7 @@ class ImageClassification(NeuralNetPredictor):
         :param samples: the number of samples. Default is 9
         :param cols: the number of columns to use while displaying images. Default is 3
         :param figsize: the matplotlib figure size to use. Default is 10, 10
+        :param target_known: whether target is present in the torch dataset or not.
         :return:
         """
 
@@ -494,16 +526,8 @@ class ImageClassification(NeuralNetPredictor):
 
             class_indices, probabilities = self.transform_output(predictions)
 
-            def create_title(y, class_index, probability):
-                target_class = self.transform_target(y)
-                predicted_class = self.transform_target(class_index)
-                title_color = "green" if predicted_class == target_class else "red"
-                return (f'Ground Truth={target_class}'
-                        f'\nPrediction={predicted_class}, '
-                        f'{round(probability.item(), 2)}', title_color)
-
-            image_title_generator = ((x[index], *create_title(targets[index], class_indices[index],
-                                                              probabilities[index]))
+            image_title_generator = ((x[index], *self._create_title_for_display(targets[index], class_indices[index],
+                                                                                probabilities[index], target_known))
                                      for index in range(x.shape[0]))
 
             plot_images_with_title(image_title_generator, samples=samples, cols=cols, figsize=figsize)
@@ -521,7 +545,6 @@ class ImageClassification(NeuralNetPredictor):
         :param img_size: image size to use while writing image to tensorboard. Default is 224.
         :return: None
         """
-
         assert isinstance(img_size, int) or (isinstance(img_size, tuple) and len(img_size) == 2)
 
         if isinstance(img_size, int):
@@ -540,18 +563,10 @@ class ImageClassification(NeuralNetPredictor):
                                                               torchvision.transforms.Resize(img_size)])
             to_tensor = torchvision.transforms.ToTensor()
 
-            text = '{ground_truth}\n{predicted_class}, {probability}'
             output_images = []
             for index in range(x.shape[0]):
-                ground_truth = self.transform_target(targets[index])
-                predicted_class = self.transform_target(class_indices[index])
-                probability = round(probabilities[index].item(), 2)
-
-                content = text.format(ground_truth=ground_truth, predicted_class=predicted_class,
-                                      probability=probability)
-                text_color = "green" if ground_truth == predicted_class else "red"
-                content_image = create_text_image(content, img_size=img_size, text_color=text_color)
-
+                content_image = self._create_output_image_for_tensorboard(targets[index], class_indices[index],
+                                                                          probabilities[index], img_size)
                 if input_img_size != img_size:
                     output_images.append(to_tensor(to_pillow_image(x[index].squeeze(dim=0))))
                 else:
@@ -569,8 +584,8 @@ class MultiLabelImageClassification(ImageClassification):
 
     def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
                  model_file_name='latest_model.pt', use_gpu=True, classes=None):
-        super(ImageClassification, self).__init__(model, model_dir, load_saved_model,
-                                                  model_file_name, use_gpu)
+        super(MultiLabelImageClassification, self).__init__(model, model_dir, load_saved_model,
+                                                            model_file_name, use_gpu)
         self._classes = classes
 
     def predict_class(self, loader):
@@ -596,3 +611,25 @@ class MultiLabelImageClassification(ImageClassification):
         indices[probability > 0.5] = 1
 
         return indices, probability
+
+    def _create_title_for_display(self, target_class_indices, predicted_class_indexes, predicted_probs,
+                                  target_known=True):
+        predicted_classes = self.transform_target(predicted_class_indexes)
+        predicted_probs = f'{", ".join([round(predicted_probs[prob_index], 2) for prob_index in predicted_class_indexes if prob_index])}'
+
+        if target_known:
+            target_classes = self.transform_target(target_class_indices)
+            title_color = "green" if target_classes == predicted_classes else "red"
+            return f'GT={target_classes}\nPred={predicted_classes},\n{predicted_probs}', title_color
+        else:
+            return f'{target_class_indices}\nPred={predicted_classes},\n{predicted_probs}', "yellow"
+
+    def _create_output_image_for_tensorboard(self, target_class_indices, predicted_class_indexes, predicted_probs,
+                                             img_size=(224, 224)):
+
+        target_classes = self.transform_target(target_class_indices)
+        predicted_classes = self.transform_target(predicted_class_indexes)
+        probabilities = ", ".join([round(predicted_probs[prob_index], 2) for prob_index in predicted_class_indexes if prob_index])
+        display_content = f'{target_classes}\n{predicted_classes}\n{probabilities}'
+        text_color = "green" if target_classes == predicted_classes else "red"
+        return create_text_image(display_content, img_size=img_size, text_color=text_color)
