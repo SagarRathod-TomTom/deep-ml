@@ -129,14 +129,8 @@ class SegmentationDataFrameDataset(torch.utils.data.Dataset):
         self.image_dir = image_dir
         self.mask_dir = mask_dir
 
-        assert os.path.exists(image_dir) and os.path.exists(mask_dir)
-
         self.image_col = image_col
-        assert self.image_col in self.dataframe.columns
-
         self.mask_col = mask_col
-        if self.mask_col is not None and self.mask_col not in self.dataframe.columns:
-            raise ValueError(f"{self.mask_col} does not exist in the dataframe")
 
         self.albu_torch_transforms = albu_torch_transforms
         self.samples = self.dataframe.shape[0]
@@ -149,7 +143,7 @@ class SegmentationDataFrameDataset(torch.utils.data.Dataset):
 
         image_file = os.path.join(self.image_dir, self.dataframe.loc[index, self.image_col])
 
-        if self.mask_col is not None:
+        if self.mask_col:
             mask_file = os.path.join(self.mask_dir, self.dataframe.loc[index, self.mask_col])
         else:
             mask_file = os.path.join(self.mask_dir, self.dataframe.loc[index, self.image_col])
@@ -161,6 +155,6 @@ class SegmentationDataFrameDataset(torch.utils.data.Dataset):
             image, mask = self.open_file_func(image_file, mask_file)
 
         if self.albu_torch_transforms is not None:
-            image, mask = self.albu_torch_transforms(image=image, mask=mask)
+            image, mask = self.albu_torch_transforms(image=np.array(image), mask=np.array(mask))
 
         return image, mask
