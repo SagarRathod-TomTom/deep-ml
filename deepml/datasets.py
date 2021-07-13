@@ -155,6 +155,8 @@ class SegmentationDataFrameDataset(torch.utils.data.Dataset):
             image, mask = self.open_file_func(image_file, mask_file)
 
         if self.albu_torch_transforms is not None:
-            image, mask = self.albu_torch_transforms(image=np.array(image), mask=np.array(mask))
+            transformed = self.albu_torch_transforms(image=np.array(image), mask=np.array(mask))
+            image = transformed['image']
+            mask = transformed['mask']
 
         return image, mask
