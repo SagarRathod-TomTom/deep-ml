@@ -26,6 +26,7 @@ class AlbumentationTorchTranforms:
     Accepts image and mask in python dict as PIL.Image or np.ndarray
     return torch tensor
     '''
+
     def __call__(self, image, mask):
 
         if type(image) != np.ndarray:
@@ -53,13 +54,13 @@ class ImageInverseTransform:
     """ Implementation of the inverse transform for image using mean and std_dev
         Accepts image_batch in #B, #C, #H #W order
     """
+
     def __init__(self, mean, std):
         super(ImageInverseTransform, self).__init__()
         self.mean = torch.tensor(mean)
         self.std = torch.tensor(std)
 
     def __call__(self, image_batch):
-
         self.mean = self.mean.to(image_batch.device)
         self.std = self.std.to(image_batch.device)
 
@@ -71,6 +72,15 @@ class ImageNetInverseTransform(ImageInverseTransform):
        Imagenet inverse transform
        accepts image_batch in #B, #C, #H #W order
    '''
+
     def __init__(self):
         super(ImageNetInverseTransform, self).__init__(constants.IMAGENET_MEAN,
                                                        constants.IMAGENET_STD)
+
+
+class DivideBy255:
+    '''
+    Divide by 255
+    '''
+    def __call__(self, image_batch):
+        return image_batch / 255

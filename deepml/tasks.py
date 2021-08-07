@@ -157,27 +157,51 @@ class NeuralNetPredictor(Predictor):
 
 class Segmentation(NeuralNetPredictor):
     """
-    This class is useful for binary and Multiclass Segmentation.
+    This class is useful for binary and Multiclass pixel segmentation.
     """
 
     def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
-                 model_file_name='latest_model.pt', use_gpu=True, classes=None, threshold=0.5):
+                 model_file_name='latest_model.pt', use_gpu=True, classes=2, threshold=0.5,
+                 color_map=None):
+        """
+
+        :param model: The model architecture defined using torch.nn.Module
+        :param model_dir:
+        :param load_saved_model:
+        :param model_file_name:
+        :param use_gpu:
+        :param classes:   The number of classes. Default is 2 for binary segmentation.
+                          The class index 0 being background class and 1 being object of interest.
+        :param threshold: The threshold for binary segmentation.
+        :param color_map: The color map dictionary with class-index as a key and value as color.
+                          If color_map is None,
+                          For binary segmentation, by default it is {0: 0, 1: 255}
+                          For multiclass segmentation, dict value should be RGB color triplet,
+                          if not specified, random RGB color triplets are picked up.
+                          For example, With n = 3, {0:[0,0,0], 1: [233, 101, 100], 2: [3, 95, 200]}
+                          Class index 0 is always encoded as [0,0,0] background color.
+        """
+
         super(Segmentation, self).__init__(model, model_dir, load_saved_model,
                                            model_file_name, use_gpu)
-
         assert isinstance(classes, int), "should be the number of classes"
         assert classes > 1, "for binary segmentation task, it should be 2 classes"
 
         self.classes = classes
         self.threshold = threshold
 
-        if self.classes == 2:
-            self.color_map = {0: 0, 1: 255}
+        if color_map:
+            assert isinstance(color_map, dict)
+            self.class_index_to_color = color_map
         else:
-            self.color_map = {0: [[0, 0, 0]]}
-            additional_colors = np.random.randint(0, 256, size=(self.classes - 1, 3))
-            for index, color in enumerate(additional_colors.tolist()):
-                self.color_map[index + 1] = color
+            if self.classes == 2:
+                self.class_index_to_color = {0: 0, 1: 255}
+            else:
+                self.class_index_to_color = {0: [0, 0, 0]}
+                additional_colors = np.random.randint(0, 256, size=(self.classes - 1, 3))
+                # Create random RGB color triplets
+                for index, color in enumerate(additional_colors.tolist()):
+                    self.class_index_to_color[index + 1] = color
 
     def predict_batch(self, x):
         x = x.to(self._device)
@@ -280,7 +304,7 @@ class Segmentation(NeuralNetPredictor):
         return class_indices
 
     def decode_segmentation_mask(self, class_indices):
-        assert class_indices.ndim == 3  # C,H,W
+        assert class_indices.ndim == 4  # B,C,H,W
 
         decoded_images = []
         out_channel = 3 if self.classes > 2 else 1
@@ -290,7 +314,7 @@ class Segmentation(NeuralNetPredictor):
             output_mask = np.zeros((*class_indices[i].shape, out_channel), dtype=np.uint8)  # H,W, C
             for label in class_indices[i].unique():
                 idx = class_indices[i] == label
-                output_mask[idx] = self.color_map[label.item()]
+                output_mask[idx] = self.class_index_to_color[label.item()]
             decoded_images.append(torch.from_numpy(output_mask.transpose(2, 0, 1)))
 
         return torch.stack(decoded_images)
@@ -629,7 +653,8 @@ class MultiLabelImageClassification(ImageClassification):
 
         target_classes = self.transform_target(target_class_indices)
         predicted_classes = self.transform_target(predicted_class_indexes)
-        probabilities = ", ".join([round(predicted_probs[prob_index], 2) for prob_index in predicted_class_indexes if prob_index])
+        probabilities = ", ".join(
+            [round(predicted_probs[prob_index], 2) for prob_index in predicted_class_indexes if prob_index])
         display_content = f'{target_classes}\n{predicted_classes}\n{probabilities}'
         text_color = "green" if target_classes == predicted_classes else "red"
         return create_text_image(display_content, img_size=img_size, text_color=text_color)
