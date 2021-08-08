@@ -304,17 +304,17 @@ class Segmentation(NeuralNetPredictor):
         return class_indices
 
     def decode_segmentation_mask(self, class_indices):
-        assert class_indices.ndim == 4  # B,C,H,W
+        assert class_indices.ndim == 3  # B,H,W
 
         decoded_images = []
         out_channel = 3 if self.classes > 2 else 1
 
         # For each image in the batch
         for i in range(class_indices.shape[0]):
-            output_mask = np.zeros((*class_indices[i].shape, out_channel), dtype=np.uint8)  # H,W, C
+            output_mask = np.zeros((*class_indices[i].shape, out_channel), dtype=np.uint8)  # H,W,C
             for label in class_indices[i].unique():
                 idx = class_indices[i] == label
-                output_mask[idx] = self.class_index_to_color[label.item()]
+                output_mask[idx] = self.class_index_to_color[int(label.item())]
             decoded_images.append(torch.from_numpy(output_mask.transpose(2, 0, 1)))
 
         return torch.stack(decoded_images)
