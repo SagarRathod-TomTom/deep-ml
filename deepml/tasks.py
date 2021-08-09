@@ -293,7 +293,7 @@ class Segmentation(NeuralNetPredictor):
 
         if predictions.shape[1] == 1:
             # Binary
-            probability = torch.sigmoid(predictions)
+            probability = torch.sigmoid(predictions).squeeze(dim=1)
             class_indices = torch.zeros_like(probability)
             class_indices[probability >= self.threshold] = 1
         else:
