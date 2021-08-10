@@ -121,7 +121,7 @@ class Learner:
                 if isinstance(y, torch.Tensor):
                     y = y.to(self.__device)
 
-                if isinstance(outputs, torch.Tensor) and outputs.shape[1] == 1:
+                if isinstance(outputs, torch.Tensor) and outputs.ndim == 2 and outputs.shape[1] == 1:
                     y = y.view_as(outputs)
 
                 loss = criterion(outputs, y)
@@ -178,19 +178,24 @@ class Learner:
                                        global_step)
 
     def __write_graph_to_tensorboard(self, loader):
+
+        if not loader:
+            return
+
         # Write graph to tensorboard
-        temp_x, _ = utils.get_random_samples_batch_from_loader(loader)
-        if isinstance(temp_x, torch.Tensor):
-            temp_x = temp_x.to(self.__device)
-        elif isinstance(temp_x, list):  # list of torch tensors
-            temp_x = [x.to(self.__device) for x in temp_x]
+        temp_x = None
+        for X, _ in loader:
+            temp_x = X
+            break
+
+        temp_x = self.__predictor.models_input_to_device(temp_x)
 
         with torch.no_grad():
             self.__model.eval()
             try:
                 self.writer.add_graph(self.__model, temp_x)
             except Exception as e:
-                print("Warning: Failed to write graph to tensorboard.")
+                print("Warning: Failed to write graph to tensorboard.", e)
 
     def fit(self, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
             save_model_after_every_epoch=5, lr_scheduler=None, lr_scheduler_step_policy='epoch',
@@ -284,7 +289,7 @@ class Learner:
                 if isinstance(y, torch.Tensor):
                     y = y.to(self.__device)
 
-                if isinstance(outputs, torch.Tensor) and outputs.shape[1] == 1:
+                if isinstance(outputs, torch.Tensor) and outputs.ndim == 2 and outputs.shape[1] == 1:
                     y = y.view_as(outputs)
 
                 loss = self.__criterion(outputs, y)

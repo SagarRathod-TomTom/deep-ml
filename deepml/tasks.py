@@ -56,6 +56,15 @@ class Predictor(ABC):
     def model_file_name(self):
         return self._model_file_name
 
+    def models_input_to_device(self, x):
+        if isinstance(x, torch.Tensor):
+            x = x.to(self._device)
+        elif isinstance(x, list):  # list of torch tensors
+            x = [i.to(self._device) for i in x]
+        elif isinstance(x, tuple):  # tuple of torch tensors
+            x = tuple([i.to(self._device) for i in x])
+        return x
+
     def transform_input(self, x, image_inverse_transform=None):
         """
        Accepts input image batch in #BCHW form
@@ -112,7 +121,7 @@ class NeuralNetPredictor(Predictor):
                                                  model_file_name, use_gpu)
 
     def predict_batch(self, x):
-        x = x.to(self._device)
+        x = self.models_input_to_device(x)
         return self._model(x)
 
     def predict(self, loader):
@@ -204,7 +213,7 @@ class Segmentation(NeuralNetPredictor):
                     self.class_index_to_color[index + 1] = color
 
     def predict_batch(self, x):
-        x = x.to(self._device)
+        x = self.models_input_to_device(x)
         pred = self._model(x)
 
         if isinstance(pred, dict) and 'out' in pred:
