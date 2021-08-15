@@ -285,13 +285,16 @@ class Segmentation(NeuralNetPredictor):
             target_mask = target_mask.permute([0, 2, 3, 1])
             output_mask = output_mask.permute([0, 2, 3, 1])
 
+            if self.classes == 2:
+                target_mask = torch.cat([target_mask, target_mask, target_mask], dim=3)
+                output_mask = torch.cat([output_mask, output_mask, output_mask], dim=3)
+
             images = []
             for i in range(x.shape[0]):
                 images.extend([x[i], target_mask[i], output_mask[i]])
 
             image_titles = ["Input", "Target", "Prediction"] * x.shape[0]
             plot_images(images, image_titles, cols=cols, figsize=figsize, fontsize=12)
-        return x, class_indices
 
     def transform_target(self, y):
         return self.decode_segmentation_mask(y)
@@ -343,14 +346,12 @@ class Segmentation(NeuralNetPredictor):
             class_indices = self.transform_output(predictions)
             output_mask = self.decode_segmentation_mask(class_indices)
 
-            target_mask = target_mask.to(x.dtype)
-            output_mask = output_mask.to(x.dtype)
+            target_mask = target_mask.to(torch.uint8)
+            output_mask = output_mask.to(torch.uint8)
 
-            images = []
-            for i in range(x.shape[0]):
-                images.extend([x[i], target_mask[i], output_mask[i]])
-
-            writer.add_images(tag, torch.stack(images), global_step)
+            writer.add_images(f"{tag} Input Image", x, global_step)
+            writer.add_images(f"{tag} Target Mask", target_mask, global_step)
+            writer.add_images(f"{tag} Output Mask", output_mask, global_step)
 
 
 class ImageRegression(NeuralNetPredictor):
