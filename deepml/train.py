@@ -167,15 +167,17 @@ class Learner:
         for name, value in self.__metrics_dict.items():
             self.history[f"{stage}_{name}"].append(value)
 
-    def __write_lr_to_tensorboard(self, global_step):
-        # Write lr to tensor-board
+    def __write_lr(self, global_step):
+        # Write lr to tensor-board and history dict
         if len(self.__optimizer.param_groups) == 1:
             param_group = self.__optimizer.param_groups[0]
             self.writer.add_scalar('learning_rate', param_group['lr'], global_step)
+            self.history['learning_rate'].append(param_group['lr'])
         else:
             for index, param_group in enumerate(self.__optimizer.param_groups):
                 self.writer.add_scalar(f'learning_rate/param_group_{index}', param_group['lr'],
                                        global_step)
+                self.history[f'learning_rate/param_group_{index}'].append(param_group['lr'])
 
     def __write_graph_to_tensorboard(self, loader):
 
@@ -276,7 +278,7 @@ class Learner:
             self.__init_metrics(metrics)
 
             # Write current lr to tensor-board
-            self.__write_lr_to_tensorboard(epoch + 1)
+            self.__write_lr(epoch + 1)
 
             bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
             for batch_index, (x, y) in enumerate(train_loader):
