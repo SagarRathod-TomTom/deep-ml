@@ -179,7 +179,7 @@ class Segmentation(NeuralNetPredictor):
         :param load_saved_model:
         :param model_file_name:
         :param use_gpu:
-        :param classes:   The number of classes. Default is 2 for binary segmentation.
+        :param classes:   The number of classes. Default is 1 for binary segmentation.
                           The class index 0 being background class and 1 being object of interest.
         :param threshold: The threshold for binary segmentation.
         :param color_map: The color map dictionary with class-index as a key and value as color.
@@ -194,7 +194,7 @@ class Segmentation(NeuralNetPredictor):
         super(Segmentation, self).__init__(model, model_dir, load_saved_model,
                                            model_file_name, use_gpu)
         assert isinstance(classes, int), "should be the number of classes"
-        assert classes > 1, "for binary segmentation task, it should be 2 classes"
+        assert classes >= 1, "for segmentation task, it should be greater than 1 class"
 
         self.classes = classes
         self.threshold = threshold
@@ -203,7 +203,7 @@ class Segmentation(NeuralNetPredictor):
             assert isinstance(color_map, dict)
             self.class_index_to_color = color_map
         else:
-            if self.classes == 2:
+            if self.classes == 1:
                 self.class_index_to_color = {0: 0, 1: 255}
             else:
                 self.class_index_to_color = {0: [0, 0, 0]}
@@ -285,7 +285,7 @@ class Segmentation(NeuralNetPredictor):
             target_mask = target_mask.permute([0, 2, 3, 1])
             output_mask = output_mask.permute([0, 2, 3, 1])
 
-            if self.classes == 2:
+            if self.classes == 1:
                 target_mask = torch.cat([target_mask, target_mask, target_mask], dim=3)
                 output_mask = torch.cat([output_mask, output_mask, output_mask], dim=3)
 
@@ -316,10 +316,15 @@ class Segmentation(NeuralNetPredictor):
         return class_indices
 
     def decode_segmentation_mask(self, class_indices):
+        """ Convert segmentation mask into RGB color image.
+
+        :param class_indices: batch of segmentation mask in #BHW format
+        :return: batch of decoded RGB images in #BCHW format
+        """
         assert class_indices.ndim == 3  # B,H,W
 
         decoded_images = []
-        out_channel = 3 if self.classes > 2 else 1
+        out_channel = 3 if self.classes > 1 else 1
 
         # For each image in the batch
         for i in range(class_indices.shape[0]):
