@@ -170,7 +170,7 @@ class Segmentation(NeuralNetPredictor):
     """
 
     def __init__(self, model: torch.nn.Module, model_dir, load_saved_model=False,
-                 model_file_name='latest_model.pt', use_gpu=True, classes=2, threshold=0.5,
+                 model_file_name='latest_model.pt', use_gpu=True, num_classes=1, threshold=0.5,
                  color_map=None):
         """
 
@@ -179,7 +179,7 @@ class Segmentation(NeuralNetPredictor):
         :param load_saved_model:
         :param model_file_name:
         :param use_gpu:
-        :param classes:   The number of classes. Default is 1 for binary segmentation.
+        :param num_classes:   The number of classes. Default is 1 for binary segmentation.
                           The class index 0 being background class and 1 being object of interest.
         :param threshold: The threshold for binary segmentation.
         :param color_map: The color map dictionary with class-index as a key and value as color.
@@ -193,21 +193,21 @@ class Segmentation(NeuralNetPredictor):
 
         super(Segmentation, self).__init__(model, model_dir, load_saved_model,
                                            model_file_name, use_gpu)
-        assert isinstance(classes, int), "should be the number of classes"
-        assert classes >= 1, "for segmentation task, it should be greater than 1 class"
+        assert isinstance(num_classes, int), "should be the number of classes"
+        assert num_classes >= 1, "for segmentation task, it should be greater than 1 class"
 
-        self.classes = classes
+        self.num_classes = num_classes
         self.threshold = threshold
 
         if color_map:
             assert isinstance(color_map, dict)
             self.class_index_to_color = color_map
         else:
-            if self.classes == 1:
+            if self.num_classes == 1:
                 self.class_index_to_color = {0: 0, 1: 255}
             else:
                 self.class_index_to_color = {0: [0, 0, 0]}
-                additional_colors = np.random.randint(0, 256, size=(self.classes - 1, 3))
+                additional_colors = np.random.randint(0, 256, size=(self.num_classes - 1, 3))
                 # Create random RGB color triplets
                 for index, color in enumerate(additional_colors.tolist()):
                     self.class_index_to_color[index + 1] = color
@@ -285,7 +285,7 @@ class Segmentation(NeuralNetPredictor):
             target_mask = target_mask.permute([0, 2, 3, 1])
             output_mask = output_mask.permute([0, 2, 3, 1])
 
-            if self.classes == 1:
+            if self.num_classes == 1:
                 target_mask = torch.cat([target_mask, target_mask, target_mask], dim=3)
                 output_mask = torch.cat([output_mask, output_mask, output_mask], dim=3)
 
@@ -321,10 +321,14 @@ class Segmentation(NeuralNetPredictor):
         :param class_indices: batch of segmentation mask in #BHW format
         :return: batch of decoded RGB images in #BCHW format
         """
-        assert class_indices.ndim == 3  # B,H,W
+        assert class_indices.ndim == 3 or class_indices.ndim == 4  # BCHW or #BHW
+
+        if class_indices.ndim == 4:
+            # Need to convert #BCHW --> #BHW
+            class_indices = self.transform_output(class_indices)
 
         decoded_images = []
-        out_channel = 3 if self.classes > 1 else 1
+        out_channel = 3 if self.num_classes > 1 else 1
 
         # For each image in the batch
         for i in range(class_indices.shape[0]):

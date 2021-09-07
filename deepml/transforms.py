@@ -84,3 +84,16 @@ class DivideBy255:
     '''
     def __call__(self, image_batch):
         return image_batch / 255
+
+
+class MulticlassSegmentationTargetTransform:
+    """
+    Converts categorical class index tensor into one-hot vector required for multiclass segmentation.
+    """
+
+    def __init__(self, num_classes):
+        self.num_classes = num_classes
+
+    def __call__(self, target):
+        assert target.ndim == 2  # H,W
+        return torch.stack([(target == class_index) for class_index in range(self.num_classes)]).to(torch.float32)

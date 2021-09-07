@@ -2,6 +2,10 @@ import torch
 
 
 class JaccardLoss(torch.nn.modules.loss._Loss):
+    """
+    Jaccard Loss aka IoU
+
+    """
 
     def __init__(self, is_multiclass):
         super(JaccardLoss, self).__init__()
