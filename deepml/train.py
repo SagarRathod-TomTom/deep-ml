@@ -14,6 +14,15 @@ from deepml import utils
 class Learner:
 
     def __init__(self, predictor, optimizer, criterion, load_optimizer_state=False):
+        """
+        Training class for learning a model weights using predictor and optimizer.
+
+        :param predictor: Object of sub class deepml.tasks.Predictor
+        :param optimizer: The optimizer from torch.optim
+        :param criterion: The loss function
+        :param load_optimizer_state: Weather to load optimizer state to resume model training. Default is False.
+                                     If true, optimizer state is loaded with load_state_dict and history of epoch.
+        """
 
         assert isinstance(predictor, Predictor)
         assert isinstance(optimizer, torch.optim.Optimizer)
@@ -299,7 +308,7 @@ class Learner:
 
                 self.__optimizer.step()
 
-                if lr_scheduler is not None and lr_scheduler_step_policy == "batch":
+                if lr_scheduler and lr_scheduler_step_policy == "batch":
                     lr_scheduler.step()
 
                 step = step + 1
@@ -351,8 +360,8 @@ class Learner:
 
             self.writer.flush()
             print(message)
-            if epoch % save_model_after_every_epoch == 0:
-                model_file_name = "model_epoch_{}.pt".format(epoch)
+            if self.epochs_completed % save_model_after_every_epoch == 0:
+                model_file_name = "model_epoch_{}.pt".format(self.epochs_completed)
                 self.save(model_file_name, save_optimizer_state=True, epoch=self.epochs_completed,
                           train_loss=train_loss, val_loss=val_loss)
 
