@@ -73,7 +73,8 @@ class Learner:
     def __load_optimizer_state(self):
         model_path = os.path.join(self.__model_dir, self.__model_file_name)
         if os.path.exists(model_path):
-            state_dict = torch.load(model_path)
+            state_dict = (torch.load(model_path) if torch.cuda.is_available()
+                          else torch.load(model_path, map_location=torch.device('cpu')))
             if 'optimizer' in state_dict:
                 if state_dict['optimizer'] == self.__optimizer.__class__.__name__:
                     self.__optimizer.load_state_dict(state_dict['optimizer_state'])
