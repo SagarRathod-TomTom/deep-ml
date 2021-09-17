@@ -9,6 +9,15 @@ from deepml.utils import get_random_samples_batch_from_loader, transform_input, 
 
 
 def plot_images(images, labels=None, cols=4, figsize=(10, 10), fontsize=14):
+    """
+    Plot images with provided labels.
+    :param images: The list of images of type np.array.
+    :param labels: The corresponding labels for images.
+    :param cols: The number of cols. Default is 4.
+    :param figsize: The matplotlib figure size. Default is (10,10)
+    :param fontsize: The fontsize for title display. Default is 14.
+    :return: None
+    """
     plt.figure(figsize=figsize)
     rows = int(np.ceil(len(images) / cols))
     for index, image in enumerate(images):
@@ -23,14 +32,14 @@ def plot_images(images, labels=None, cols=4, figsize=(10, 10), fontsize=14):
 def plot_images_with_title(image_title_generator, samples, cols=4, figsize=(10, 10), fontsize=14):
     """
     Plots images with colored title.
-    Accepts generator that yields triplet tuple (image, title, title color)
+    Accepts generator that yields triplet tuple (image: np.array, title: str, title color: str)
 
-    :param image_title_generator:
-    :param samples:
-    :param cols:
-    :param figsize:
-    :param fontsize:
-    :return:
+    :param image_title_generator: The generator returning tuples (image, title, title color)
+    :param samples: The total number of samples in generator.
+    :param cols: The number of columns. Default is 4.
+    :param figsize: The matplotlib figure size. Default is (10,10)
+    :param fontsize: The fontsize for title display. Default is 14.
+    :return: None
     """
 
     plt.figure(figsize=figsize)
@@ -45,6 +54,19 @@ def plot_images_with_title(image_title_generator, samples, cols=4, figsize=(10, 
 
 def show_images_from_loader(loader, image_inverse_transform=None, samples=9, cols=3, figsize=(5, 5),
                             classes=None, title_color=None):
+    """
+    Displays random samples of images from a torch.utils.data.DataLoader
+   :param loader: An instance of torch.utils.data.DataLoader returning torch.tensor of shape in order #BCWH
+   :param image_inverse_transform: The inverse transform to apply on image tensor before displaying it.
+                                   Default is None.
+                                   For imagenet normalized image tensor, use deepml.transforms.ImageNetInverseTransform
+   :param samples: The number of random image samples to display. Default is 9.
+   :param cols: The number of display columns in the matplotlib figure. Default is 3.
+   :param figsize: The matplotlib figure size. Default is (10,10)
+   :param classes: The list of class names for class indices return by torch dataset.
+   :param title_color: The title color for images.
+   :return: None
+   """
     x, y = get_random_samples_batch_from_loader(loader, samples=samples)
     x = transform_input(x, image_inverse_transform)
 
@@ -56,8 +78,21 @@ def show_images_from_loader(loader, image_inverse_transform=None, samples=9, col
     plot_images_with_title(image_title_generator, samples=samples, cols=cols, figsize=figsize)
 
 
-def show_images_from_dataset(dataset, image_inverse_transform=None, samples=9, cols=3, figsize=(5, 5),
+def show_images_from_dataset(dataset, image_inverse_transform=None, samples=9, cols=3, figsize=(10, 10),
                              classes=None, title_color=None):
+    """
+    Displays random samples of images from a torch.utils.data.Dataset
+   :param dataset: An instance of torch.utils.data.Dataset returning torch.tensor of shape in order #BCWH
+   :param image_inverse_transform: The inverse transform to apply on image tensor before displaying it.
+                                   Default is None.
+                                   For imagenet normalized image tensor, use deepml.transforms.ImageNetInverseTransform
+   :param samples: The number of random image samples to display. Default is 9.
+   :param cols: The number of display columns in the matplotlib figure. Default is 3.
+   :param figsize: The matplotlib figure size. Default is (10,10)
+   :param classes: The list of class names for class indices return by torch dataset.
+   :param title_color: The title color for images.
+   :return: None
+   """
     x, y = get_random_samples_batch_from_dataset(dataset, samples=samples)
     x = transform_input(x, image_inverse_transform)
 
@@ -70,6 +105,16 @@ def show_images_from_dataset(dataset, image_inverse_transform=None, samples=9, c
 
 
 def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10), title_color=None):
+    """
+    Displays random samples of images from a folder.
+    :param img_dir: The image directory containing images.
+    :param samples: The number of random image samples to display. Default is 9.
+    :param cols: The number of display columns in the matplotlib figure. Default is 3.
+    :param figsize: The matplotlib figure size. Default is (10,10)
+    :param title_color: The title color for images.
+    :return: None
+    """
+
     files = os.listdir(img_dir)
     if samples < len(files):
         samples = np.random.choice(files, size=samples, replace=False)
@@ -84,6 +129,19 @@ def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10), title_
 def show_images_from_dataframe(dataframe, img_dir=None, image_file_name_column="image",
                                label_column='label', samples=9, cols=3, figsize=(10, 10),
                                title_color=None):
+    """
+    Displays random samples of images from a dataframe using matplotlib figure.
+    :param dataframe: The dataframe containing containing column for image filenames
+    :param img_dir: The image directory. Default is None. If None, dataframe image filename column supposed
+                    to contain full path to the image file.
+    :param image_file_name_column: The name of the column containing image file names. Default is "image".
+    :param label_column: The label columns containing the title for image file to be displayed. Default is 'label'.
+    :param samples: The number of random image samples to display. Default is 9.
+    :param cols: The number of display columns in the matplotlib figure. Default is 3.
+    :param figsize: The matplotlib figure size. Default is (10,10)
+    :param title_color: The title color for images.
+    :return: None
+    """
     samples = dataframe.sample(samples)
     image_generator = ((Image.open(os.path.join(img_dir, row_data[image_file_name_column])),
                         row_data[label_column], title_color)
