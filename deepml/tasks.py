@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torchvision
+from PIL.Image import Image
 from tqdm.auto import tqdm
 
 from deepml.utils import create_text_image, get_random_samples_batch_from_loader
@@ -212,6 +213,16 @@ class Segmentation(NeuralNetPredictor):
                 for index, color in enumerate(additional_colors.tolist()):
                     self.class_index_to_color[index + 1] = color
 
+        self.__create_color_palette()
+
+    def __create_color_palette(self):
+        if self.num_classes == 1:
+            self.palette = np.array([0, 0, 0, 255, 255, 255])
+        else:
+            self.palette = np.array(list(self.class_index_to_color.values())).flatten()
+
+        self.palette = np.hstack([self.palette, np.zeros(768 - (len(self.palette)))])
+
     def predict_batch(self, x):
         x = self.models_input_to_device(x)
         pred = self._model(x)
@@ -221,47 +232,39 @@ class Segmentation(NeuralNetPredictor):
         else:
             return pred
 
-    def predict(self, loader, **kwargs):
+    def save_prediction(self, loader, save_dir):
         """
-        Accepts torch data loader and performs prediction
+        Accepts torch data loader, performs prediction and save prediction as png image into save directory.
+        Loader must return (batch_tensor, image_file_names)
+
         :param loader: torch.data loaders
         :param save_dir : the output path to save predicted segmentation mask
         :return: tuple of torch.Tensor of (prediction, targets)
         """
         assert loader is not None and len(loader) > 0
-        save_dir = kwargs.get('save_dir', None)
+        assert save_dir is not None, "Output directory should not be none."
 
-        if save_dir is not None:
+        if save_dir:
             os.makedirs(save_dir, exist_ok=True)
 
-        predictions = []
-        targets = []
-
         self._model = self._model.to(self._device)
+        self._model.eval()
         with torch.no_grad():
             for x, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
                 y_pred = self.predict_batch(x).cpu()
+                output_mask = self.transform_output(y_pred)
+                self._save_image_batch(output_mask, y.tolist(), save_dir)
 
-                if save_dir is not None:
-                    output_mask = self.decode_segmentation_mask(self.transform_output(y_pred))
-                    Segmentation.save_image_batch(output_mask, save_dir, y.tolist())
-                else:
-                    predictions.append(y_pred)
-                    targets.append(y)
-
-        if len(predictions) > 0 and len(targets) > 0:
-            predictions = torch.cat(predictions)
-            targets = torch.cat(targets) if isinstance(targets[0], torch.Tensor) else np.hstack(targets).tolist()
-
-        return predictions, targets
-
-    @staticmethod
-    def save_image_batch(output_mask, outdir, filenames):
-        assert output_mask.ndim == 4, "should be in the form of BCHW"
-
-        for i in range(output_mask.shape[0]):
-            image = torchvision.transforms.functional.to_pil_image(output_mask[i])
-            image.save(os.path.join(outdir, filenames[i]))
+    def _save_image_batch(self, class_indices, filenames, save_dir):
+        assert class_indices.ndim == 4, "should be in the form of BCHW"
+        class_indices = class_indices.numpy().transpose([0, 2, 3, 1])
+        for i in range(class_indices.shape[0]):
+            image = Image.fromarray(class_indices[i], "P")
+            image.putpalette(self.palette)
+            filename = filenames[i]
+            if not filename.endswith(".png"):
+                filename = f"{filename.split('.')[0]}.png"
+            image.save(os.path.join(save_dir, filename))
 
     def predict_class(self, loader):
         raise NotImplementedError()
