@@ -253,7 +253,7 @@ class Segmentation(NeuralNetPredictor):
             for x, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
                 y_pred = self.predict_batch(x).cpu()
                 output_mask = self.transform_output(y_pred)
-                self._save_image_batch(output_mask, y.tolist(), save_dir)
+                self._save_image_batch(output_mask, y, save_dir)
 
     def _save_image_batch(self, class_indices, filenames, save_dir):
         assert class_indices.ndim == 4, "should be in the form of BCHW"
