@@ -104,26 +104,27 @@ def show_images_from_dataset(dataset, image_inverse_transform=None, samples=9, c
     plot_images_with_title(image_title_generator, samples=samples, cols=cols, figsize=figsize)
 
 
-def show_images_from_folder(img_dir, samples=9, cols=3, figsize=(10, 10), title_color=None):
+def show_images_from_folder(img_dir, images=None, samples=9, cols=3, figsize=(10, 10), title_color=None):
     """
-    Displays random samples of images from a folder.
+    Displays random samples of images from a folder or list of images.
     :param img_dir: The image directory containing images.
+    :param images: The list of image filenames. Default is None.
     :param samples: The number of random image samples to display. Default is 9.
     :param cols: The number of display columns in the matplotlib figure. Default is 3.
     :param figsize: The matplotlib figure size. Default is (10,10)
     :param title_color: The title color for images.
     :return: None
     """
-
-    files = os.listdir(img_dir)
-    if samples < len(files):
-        samples = np.random.choice(files, size=samples, replace=False)
-    else:
-        samples = files
+    if not images:
+        files = os.listdir(img_dir)
+        if samples < len(files):
+            images = np.random.choice(files, size=samples, replace=False)
+        else:
+            images = files
 
     image_generator = ((Image.open(os.path.join(img_dir, file)), file, title_color)
-                       for file in samples)
-    plot_images_with_title(image_generator, len(samples), cols=cols, figsize=figsize)
+                       for file in images)
+    plot_images_with_title(image_generator, len(images), cols=cols, figsize=figsize)
 
 
 def show_images_from_dataframe(dataframe, img_dir=None, image_file_name_column="image",
