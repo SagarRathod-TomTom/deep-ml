@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import rasterio as rs
 from PIL import Image
 
 
@@ -21,6 +20,7 @@ def create_chips(input_image, label_image, out_dir, stride=256, window_size=256,
     """
 
     if geo_tagged:
+        import rasterio as rs
         image = rs.open(input_image)
         label = rs.open(label_image)
         imgarr = image.read()
