@@ -1,7 +1,7 @@
 import os
 import csv
 from collections import OrderedDict, defaultdict
-
+from itertools import cycle
 import numpy as np
 import torch
 from tqdm.auto import tqdm
@@ -291,8 +291,10 @@ class Learner:
             self.__write_lr(epoch + 1)
 
             bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
-            for batch_index, (x, y) in enumerate(train_loader):
+            iterator = cycle(train_loader)
+            for batch_index in range(steps_per_epoch):
 
+                x, y = next(iterator)
                 # zero the parameter gradients
                 self.__optimizer.zero_grad()
 
