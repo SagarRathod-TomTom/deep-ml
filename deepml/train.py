@@ -291,10 +291,10 @@ class Learner:
             self.__write_lr(epoch + 1)
 
             bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
-            iterator = cycle(train_loader)
-            for batch_index in range(steps_per_epoch):
+            #iterator = cycle(train_loader)
+            for batch_index, (x, y) in enumerate(train_loader):
 
-                x, y = next(iterator)
+                #x, y = next(iterator)
                 # zero the parameter gradients
                 self.__optimizer.zero_grad()
 
