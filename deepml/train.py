@@ -1,7 +1,6 @@
 import os
 import csv
 from collections import OrderedDict, defaultdict
-from itertools import cycle
 import numpy as np
 import torch
 from tqdm.auto import tqdm
@@ -253,6 +252,8 @@ class Learner:
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
 
+        assert steps_per_epoch <= len(train_loader), "Steps per epoch should not be greater than len(train_loader)"
+
         self.__model.to(self.__device)
         self.__criterion = self.__criterion.to(self.__device)
 
@@ -291,10 +292,8 @@ class Learner:
             self.__write_lr(epoch + 1)
 
             bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
-            #iterator = cycle(train_loader)
             for batch_index, (x, y) in enumerate(train_loader):
 
-                #x, y = next(iterator)
                 # zero the parameter gradients
                 self.__optimizer.zero_grad()
 
@@ -321,6 +320,9 @@ class Learner:
                 self.__update_metrics(outputs, y, metrics, step)
                 bar.update(1)
                 bar.set_postfix({name: f'{round(value, 4)}' for name, value in self.__metrics_dict.items()})
+
+                if (batch_index + 1) % steps_per_epoch == 0:
+                    break
 
             self.epochs_completed = self.epochs_completed + 1
 
