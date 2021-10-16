@@ -113,7 +113,7 @@ class Learner:
         self.__model.to(self.__device)
         return filepath
 
-    def validate(self, criterion, loader, metrics=None):
+    def validate(self, loader, criterion, metrics=None):
         if loader is None:
             raise Exception('Loader cannot be None.')
 
@@ -335,7 +335,7 @@ class Learner:
             message = f"Training Loss: {train_loss:.4f} "
             val_loss = np.inf
             if val_loader is not None:
-                self.validate(self.__criterion, val_loader, metrics)
+                self.validate(val_loader, self.__criterion, metrics)
                 val_loss = self.__metrics_dict['loss']
                 self.__write_metrics_to_tensorboard('val', self.epochs_completed)
                 self.__write_history('val')
