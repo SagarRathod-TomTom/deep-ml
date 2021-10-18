@@ -7,6 +7,7 @@ tensorboard >= 1.14.0
 matplotlib >= 2.2.5
 scikit-learn ~= 0.22
 setuptools ~= 42.0.2
-
 torchvision ~= 0.2.1
 scikit-image ~= 0.16.2
+pytest ~= 3.5.1
+rasterio ~= 1.1.1
