@@ -12,7 +12,7 @@ segmentation problems.
 
 3. Quickly visualize your model's predictions.
 
-4. Following are different types of machine learning tasks available to choose from:
+4. Following are different types of machine learning tasks available to choose from <strong>deepml.tasks</strong>:
 
    * ImageClassification
    * MultiLabelImageClassification
@@ -81,13 +81,13 @@ learner.fit(train_loader, val_loader, epochs=10, lr_scheduler=lr_scheduler)
 
 ##### 6. Use tensorboard to visualize model loss and metrics.
 
-##### On Google Colab or Jupyter Notebook:
+###### On Google Colab or Jupyter Notebook:
 
 ```bash
 %load_ext tensorboard
 %tensorboard --logdir 'experiment1'
 ```
-##### On OS:
+###### On OS:
 ```bash
 tensorboard --logdir 'experiment1'
 ```
