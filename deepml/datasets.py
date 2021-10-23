@@ -108,7 +108,6 @@ class ImageListDataset(torch.utils.data.Dataset):
 
         return X, image_file
 
-
 class SegmentationDataFrameDataset(torch.utils.data.Dataset):
     """
         This class is useful for reading images and mask labels required for
@@ -122,9 +121,9 @@ class SegmentationDataFrameDataset(torch.utils.data.Dataset):
         and return image, mask
     """
 
-    def __init__(self, dataframe, image_dir, mask_dir, image_col='image',
+    def __init__(self, dataframe, image_dir, mask_dir=None, image_col='image',
                  mask_col=None, albu_torch_transforms=None,
-                 target_transform=None, open_file_func=None):
+                 target_transform=None, train=True, open_file_func=None):
         """
 
         :param dataframe: the pandas dataframe
@@ -132,22 +131,26 @@ class SegmentationDataFrameDataset(torch.utils.data.Dataset):
         :param mask_dir: the dir path containing mask images
         :param image_col: the name of column in dataframe, file is fetched
                           by path joining os.path.join(image_dir, df.loc[index, image_col]
-        :param mask_col:  Same as image_col
+        :param mask_col:  Same as image_col, If None image_col's filename is used for mask.
         :param albu_torch_transforms: albumentation transforms for both image and target mask
         :param target_transform: transform for only target mask for preprocessing.
+        :param train: If true, returns tuple of tensors else return image tensor with filename. Default is True.
         :param open_file_func:  callable function to open image and mask file. By default PIL.Image.open is used.
         """
+        if train:
+            assert mask_dir, "For training purpose, mask_dir should not be None"
 
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.image_dir = image_dir
         self.mask_dir = mask_dir
 
         self.image_col = image_col
-        self.mask_col = mask_col
+        self.mask_col = mask_col if mask_col else image_col
 
         self.albu_torch_transforms = albu_torch_transforms
         self.target_transform = target_transform
         self.samples = self.dataframe.shape[0]
+        self.train = train
         self.open_file_func = open_file_func
 
     def __len__(self):
@@ -156,22 +159,24 @@ class SegmentationDataFrameDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
 
         image_file = os.path.join(self.image_dir, self.dataframe.loc[index, self.image_col])
-
-        if self.mask_col:
-            mask_file = os.path.join(self.mask_dir, self.dataframe.loc[index, self.mask_col])
-        else:
-            mask_file = os.path.join(self.mask_dir, self.dataframe.loc[index, self.image_col])
+        mask_file = os.path.join(self.mask_dir, self.dataframe.loc[index, self.mask_col]) if self.train else None
 
         if self.open_file_func is None:
             image = np.array(Image.open(image_file))
-            mask = np.array(Image.open(mask_file))
+            mask = np.array(Image.open(mask_file)) if self.train else None
         else:
             image = self.open_file_func(image_file)
-            mask = self.open_file_func(mask_file)
+            mask = self.open_file_func(mask_file) if self.train else None
 
-        transformed = self.albu_torch_transforms(image=image, mask=mask)
+        if self.train:
+            transformed = self.albu_torch_transforms(image=image, mask=mask)
+        else:
+            transformed = self.albu_torch_transforms(image=image)
 
-        if self.target_transform:
+        if self.train and self.target_transform:
             transformed['mask'] = self.target_transform(transformed['mask'])
 
-        return transformed['image'], transformed['mask']
+        if self.train:
+            return transformed['image'], transformed['mask']
+        else:
+            return transformed['image'], self.dataframe.loc[index, self.image_col]
