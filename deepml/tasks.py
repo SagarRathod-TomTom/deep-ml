@@ -256,10 +256,9 @@ class Segmentation(NeuralNetPredictor):
                 self._save_image_batch(output_mask, y, save_dir)
 
     def _save_image_batch(self, class_indices, filenames, save_dir):
-        assert class_indices.ndim == 4, "should be in the form of BCHW"
-        class_indices = class_indices.numpy().transpose([0, 2, 3, 1])
+        assert class_indices.ndim == 3, "should be in the form of BHW"
         for i in range(class_indices.shape[0]):
-            image = Image.fromarray(class_indices[i], "P")
+            image = Image.fromarray(class_indices[i].cpu().numpy().astype(np.uint8), "P")
             image.putpalette(self.palette)
             filename = filenames[i]
             if not filename.endswith(".png"):
