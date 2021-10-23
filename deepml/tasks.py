@@ -221,7 +221,7 @@ class Segmentation(NeuralNetPredictor):
         else:
             self.palette = np.array(list(self.class_index_to_color.values())).flatten().astype(np.int).tolist()
 
-        self.palette = self.palette + np.zeros(768 - (len(self.palette))).astype(np.int)
+        self.palette = self.palette + list(np.zeros(768 - (len(self.palette)), dtype=np.int).tolist())
 
     def predict_batch(self, x):
         x = self.models_input_to_device(x)
