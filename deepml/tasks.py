@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torchvision
-from PIL.Image import Image
+from PIL import Image
 from tqdm.auto import tqdm
 
 from deepml.utils import create_text_image, get_random_samples_batch_from_loader
