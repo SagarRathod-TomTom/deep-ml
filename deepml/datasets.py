@@ -1,18 +1,18 @@
-
 import os
 
 import numpy as np
 import pandas as pd
 from PIL import Image
-from torch.utils.data import Dataset
+import torch
 
 
-class ImageRowDataFrameDataset(Dataset):
+class ImageRowDataFrameDataset(torch.utils.data.Dataset):
     """ Class useful for reading images from a dataframe.
         Each row is assume to be the flattened array of an image.
         Each row is then reshaped to the provided image_size.
     """
-    def __init__(self, dataframe:pd.DataFrame, target_column=None, image_size=(28, 28),
+
+    def __init__(self, dataframe: pd.DataFrame, target_column=None, image_size=(28, 28),
                  transform=None):
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.target_column = None
@@ -43,15 +43,16 @@ class ImageRowDataFrameDataset(Dataset):
         return self.samples
 
 
-class ImageFileDataFrameDataset(Dataset):
+class ImageDataFrameDataset(torch.utils.data.Dataset):
     """ This class is useful for reading dataset of images for image classification/regression problem.
     """
-    def __init__(self, dataframe, img_file_path_column='image', target_column=None,
+
+    def __init__(self, dataframe, image_file_name_column='image', target_columns=None,
                  image_dir=None, transforms=None, open_file_func=None):
 
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
-        self.img_file_path_column = img_file_path_column
-        self.target_column = target_column
+        self.image_file_name_column = image_file_name_column
+        self.target_columns = target_columns
         self.image_dir = image_dir
         self.transforms = transforms
         self.samples = self.dataframe.shape[0]
@@ -62,9 +63,9 @@ class ImageFileDataFrameDataset(Dataset):
 
     def __getitem__(self, index):
 
-        image_file = self.dataframe.loc[index, self.img_file_path_column]
+        image_file = self.dataframe.loc[index, self.image_file_name_column]
 
-        if self.image_dir is not None:
+        if self.image_dir:
             image_file = os.path.join(self.image_dir, image_file)
 
         if self.open_file_func is None:
@@ -73,8 +74,8 @@ class ImageFileDataFrameDataset(Dataset):
             X = self.open_file_func(image_file)
 
         y = 0
-        if self.target_column is not None:
-            y = self.dataframe.loc[index, self.target_column]
+        if self.target_columns:
+            y = torch.tensor(self.dataframe.loc[index, self.target_columns], dtype=torch.float)
 
         if self.transforms is not None:
             X = self.transforms(X)
@@ -82,7 +83,7 @@ class ImageFileDataFrameDataset(Dataset):
         return X, y
 
 
-class ImageListDataset(Dataset):
+class ImageListDataset(torch.utils.data.Dataset):
 
     def __init__(self, image_dir, transforms=None, open_file_func=None):
 
@@ -107,39 +108,75 @@ class ImageListDataset(Dataset):
 
         return X, image_file
 
-
-class SemSegImageFileDataFrameDataset(Dataset):
-    """ This class is useful for reading images and mask labels required for
+class SegmentationDataFrameDataset(torch.utils.data.Dataset):
+    """
+        This class is useful for reading images and mask labels required for
         semantic segmentation problems.
 
         The image file and corresponding mask label file should have the same name,
         and should be stored in a provided mask directory.
 
-        You can provide custom open_file_func for reading image, by it uses PIL Image.open()
-
+        You can provide custom open_file_func for reading image, by default it uses PIL Image.open()
+        open_file_func should accept 2 parameters: image_file_path, mask_file path
+        and return image, mask
     """
-    def __init__(self, dataframe, image_dir, mask_dir, transforms=None, open_file_func=None):
+
+    def __init__(self, dataframe, image_dir, mask_dir=None, image_col='image',
+                 mask_col=None, albu_torch_transforms=None,
+                 target_transform=None, train=True, open_file_func=None):
+        """
+
+        :param dataframe: the pandas dataframe
+        :param image_dir: the dir path containing training images
+        :param mask_dir: the dir path containing mask images
+        :param image_col: the name of column in dataframe, file is fetched
+                          by path joining os.path.join(image_dir, df.loc[index, image_col]
+        :param mask_col:  Same as image_col, If None image_col's filename is used for mask.
+        :param albu_torch_transforms: albumentation transforms for both image and target mask
+        :param target_transform: transform for only target mask for preprocessing.
+        :param train: If true, returns tuple of tensors else return image tensor with filename. Default is True.
+        :param open_file_func:  callable function to open image and mask file. By default PIL.Image.open is used.
+        """
+        if train:
+            assert mask_dir, "For training purpose, mask_dir should not be None"
+
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.image_dir = image_dir
         self.mask_dir = mask_dir
-        self.transforms = transforms
+
+        self.image_col = image_col
+        self.mask_col = mask_col if mask_col else image_col
+
+        self.albu_torch_transforms = albu_torch_transforms
+        self.target_transform = target_transform
         self.samples = self.dataframe.shape[0]
+        self.train = train
         self.open_file_func = open_file_func
 
     def __len__(self):
         return self.samples
 
     def __getitem__(self, index):
-        image_file = self.dataframe.loc[index, 'image']
+
+        image_file = os.path.join(self.image_dir, self.dataframe.loc[index, self.image_col])
+        mask_file = os.path.join(self.mask_dir, self.dataframe.loc[index, self.mask_col]) if self.train else None
 
         if self.open_file_func is None:
-            image = Image.open(os.path.join(self.image_dir, image_file))
-            mask = Image.open(os.path.join(self.mask_dir, image_file))
+            image = np.array(Image.open(image_file))
+            mask = np.array(Image.open(mask_file)) if self.train else None
         else:
-            image = self.open_file_func(os.path.join(self.image_dir, image_file))
-            mask = self.open_file_func(os.path.join(self.mask_dir, image_file))
+            image = self.open_file_func(image_file)
+            mask = self.open_file_func(mask_file) if self.train else None
 
-        if self.transforms is not None:
-            image, mask = self.transforms(image=image, mask=mask)
+        if self.train:
+            transformed = self.albu_torch_transforms(image=image, mask=mask)
+        else:
+            transformed = self.albu_torch_transforms(image=image)
 
-        return image, mask
+        if self.train and self.target_transform:
+            transformed['mask'] = self.target_transform(transformed['mask'])
+
+        if self.train:
+            return transformed['image'], transformed['mask']
+        else:
+            return transformed['image'], self.dataframe.loc[index, self.image_col]

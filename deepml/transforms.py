@@ -4,22 +4,29 @@ import torch
 from deepml import constants
 
 
-class AlbumentationTorchCompat:
+class AlbumentationTorchTranforms:
     """
-        This class is useful for combining albumentation transforms with torchvision transforms.
+        This class is a composition of albumentations augmentation and
+        torchvision.transforms.ToTensor()
+        This first applies albumentations transformations followed by
+        torch transforms if any.
+
+        albumentations transforms gets applied on both image and mask, however the
+        torch transforms gets applied on only on input image and not on
+        the target mask.
     """
 
-    def __init__(self, albu_transforms=None, torch_transforms=None, apply_torch_transforms_to_mask=False):
-        super(AlbumentationTorchCompat, self).__init__()
+    def __init__(self, albu_transforms=None, torch_transforms=None):
+        super(AlbumentationTorchTranforms, self).__init__()
         self.albu_transforms = albu_transforms
         self.to_tensor = torchvision.transforms.ToTensor()
         self.torch_transforms = torch_transforms
-        self.apply_torch_transforms_to_mask = apply_torch_transforms_to_mask
 
     '''
     Accepts image and mask in python dict as PIL.Image or np.ndarray
     return torch tensor
     '''
+
     def __call__(self, image, mask):
 
         if type(image) != np.ndarray:
@@ -32,13 +39,13 @@ class AlbumentationTorchCompat:
             augmented = self.albu_transforms(image=image, mask=mask)
             image, mask = augmented['image'], augmented['mask']
 
-        image = self.to_tensor(image)
-
-        if self.apply_torch_transforms_to_mask:
-            mask = self.to_tensor(mask)
-
         if self.torch_transforms is not None:
             image = self.torch_transforms(image)
+
+        if not isinstance(image, torch.Tensor):
+            image = self.to_tensor(image)
+
+        mask = torch.from_numpy(mask).astype(torch.FloatTensor)
 
         return image, mask
 
@@ -47,13 +54,13 @@ class ImageInverseTransform:
     """ Implementation of the inverse transform for image using mean and std_dev
         Accepts image_batch in #B, #C, #H #W order
     """
+
     def __init__(self, mean, std):
         super(ImageInverseTransform, self).__init__()
         self.mean = torch.tensor(mean)
         self.std = torch.tensor(std)
 
     def __call__(self, image_batch):
-
         self.mean = self.mean.to(image_batch.device)
         self.std = self.std.to(image_batch.device)
 
@@ -65,6 +72,28 @@ class ImageNetInverseTransform(ImageInverseTransform):
        Imagenet inverse transform
        accepts image_batch in #B, #C, #H #W order
    '''
+
     def __init__(self):
         super(ImageNetInverseTransform, self).__init__(constants.IMAGENET_MEAN,
                                                        constants.IMAGENET_STD)
+
+
+class DivideBy255:
+    '''
+    Divide by 255
+    '''
+    def __call__(self, image_batch):
+        return image_batch / 255
+
+
+class MulticlassSegmentationTargetTransform:
+    """
+    Converts categorical class index tensor into one-hot vector required for multiclass segmentation.
+    """
+
+    def __init__(self, num_classes):
+        self.num_classes = num_classes
+
+    def __call__(self, target):
+        assert target.ndim == 2  # H,W
+        return torch.stack([(target == class_index) for class_index in range(self.num_classes)]).to(torch.float32)
