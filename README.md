@@ -112,7 +112,7 @@ Check out the below google colaboratory notebook examples:
 1. [Image Regression](https://github.com/sagar-rathod/deep-ml/blob/master/examples/Image_Regression_Example.ipynb)
 2. [Image Classification](https://github.com/sagar-rathod/deep-ml/blob/master/examples/Image_Classification_Example.ipynb)
 3. [Binary Semantic Segmentation (Road Segmentation on Satellite Imagery)](https://github.com/sagar-rathod/deep-ml/blob/master/examples/Road_Segmentation_Example.ipynb)
-4. [Multiclass Semantic Segmentation (Scene Understanding on Street Imagery)](https://github.com/sagar-rathod/deep-ml/blob/master/examples/Road_Segmentation_Example.ipynb)
+4. [Multiclass Semantic Segmentation (Scene Understanding on Street Imagery)](https://github.com/sagar-rathod/deep-ml/blob/master/examples/Multiclass_Scene_Segmentation.ipynb)
 
 
 # Contributing
