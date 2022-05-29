@@ -48,7 +48,7 @@ class ImageDataFrameDataset(torch.utils.data.Dataset):
     """
 
     def __init__(self, dataframe, image_file_name_column='image', target_columns=None,
-                 image_dir=None, transforms=None, open_file_func=None):
+                 image_dir=None, transforms=None, target_transform=None, open_file_func=None):
 
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.image_file_name_column = image_file_name_column
@@ -56,6 +56,7 @@ class ImageDataFrameDataset(torch.utils.data.Dataset):
         self.image_dir = image_dir
         self.transforms = transforms
         self.samples = self.dataframe.shape[0]
+        self.target_transform = target_transform
         self.open_file_func = open_file_func
 
     def __len__(self):
@@ -73,12 +74,14 @@ class ImageDataFrameDataset(torch.utils.data.Dataset):
         else:
             X = self.open_file_func(image_file)
 
-        y = 0
-        if self.target_columns:
-            y = torch.tensor(self.dataframe.loc[index, self.target_columns], dtype=torch.float)
-
         if self.transforms is not None:
             X = self.transforms(X)
+
+        y = 0
+        if self.target_columns:
+            y = torch.tensor(self.dataframe.loc[index, self.target_columns])
+            if self.target_transform:
+                y = self.target_transform(y)
 
         return X, y
 
