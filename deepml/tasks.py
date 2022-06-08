@@ -5,6 +5,7 @@ from typing import Union, Tuple, Any, List, Sequence, Callable
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 import torchvision
 from PIL import Image
 from tqdm.auto import tqdm
@@ -347,7 +348,7 @@ class Segmentation(NeuralNetPredictor):
         return torch.stack(decoded_images)
 
     def write_prediction_to_tensorboard(self, tag: str, loader: torch.utils.data.DataLoader,
-                                        writer: torch.utils.tensorboard.SummaryWriter,
+                                        writer: SummaryWriter,
                                         image_inverse_transform: Callable,
                                         global_step: int, img_size: Union[int, Tuple[int, int], None] = 224):
         """
@@ -451,7 +452,7 @@ class ImageRegression(NeuralNetPredictor):
         return round(prediction.item(), 2)
 
     def write_prediction_to_tensorboard(self, tag: str, loader: torch.utils.data.DataLoader,
-                                        writer: torch.utils.tensorboard.SummaryWriter,
+                                        writer: SummaryWriter,
                                         image_inverse_transform: Callable, global_step: int,
                                         img_size: Union[int, Tuple[int, int], None] = 224):
         """
