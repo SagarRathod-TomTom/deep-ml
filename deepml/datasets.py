@@ -15,7 +15,7 @@ class ImageRowDataFrameDataset(torch.utils.data.Dataset):
     """
 
     def __init__(self, dataframe: pd.DataFrame, target_column: str = None, image_size: Tuple[int, int] = (28, 28),
-                 transform: torchvision.transforms = None):
+                 transform: Callable = None):
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.target_column = None
 
@@ -50,9 +50,8 @@ class ImageDataFrameDataset(torch.utils.data.Dataset):
     """
 
     def __init__(self, dataframe: pd.DataFrame, image_file_name_column: str = 'image', target_columns: Union[int, List[
-        str]] = None, image_dir: str = None, transforms: Union[torchvision.transforms, Callable] = None,
-                 target_transform: Union[torchvision.transforms, Callable] = None,
-                 open_file_func: Callable[[Any], np.ndarray] = None):
+        str]] = None, image_dir: str = None, transforms: Callable = None,
+                 target_transform: Callable = None, open_file_func: Callable = None):
 
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.image_file_name_column = image_file_name_column
@@ -92,8 +91,7 @@ class ImageDataFrameDataset(torch.utils.data.Dataset):
 
 class ImageListDataset(torch.utils.data.Dataset):
 
-    def __init__(self, image_dir: str, transforms: torchvision.transforms = None,
-                 open_file_func: Callable[[Any], Union[np.ndarray, Image]] = None):
+    def __init__(self, image_dir: str, transforms: Callable = None, open_file_func: Callable = None):
 
         self.image_dir = image_dir
         self.images = os.listdir(image_dir)
@@ -131,9 +129,8 @@ class SegmentationDataFrameDataset(torch.utils.data.Dataset):
     """
 
     def __init__(self, dataframe: pd.DataFrame, image_dir: str, mask_dir: str = None, image_col: str = 'image',
-                 mask_col: str = None, albu_torch_transforms=None,
-                 target_transform=None, train: bool = True,
-                 open_file_func: Callable[[Any], Union[np.ndarray, Image]] = None):
+                 mask_col: str = None, albu_torch_transforms: Callable = None,
+                 target_transform: Callable = None, train: bool = True, open_file_func: Callable = None):
         """
 
         :param dataframe: the pandas dataframe
@@ -163,10 +160,10 @@ class SegmentationDataFrameDataset(torch.utils.data.Dataset):
         self.train = train
         self.open_file_func = open_file_func
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.samples
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
 
         image_file = os.path.join(self.image_dir, self.dataframe.loc[index, self.image_col])
         mask_file = os.path.join(self.mask_dir, self.dataframe.loc[index, self.mask_col]) if self.train else None

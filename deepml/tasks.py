@@ -1,9 +1,8 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Union, Tuple, Any, List, Sequence
+from typing import Union, Tuple, Any, List, Sequence, Callable
 
 import numpy as np
-import tensorboard.summary
 import torch
 import torch.nn.functional as F
 import torchvision
@@ -68,7 +67,7 @@ class Predictor(ABC):
             x = tuple([i.to(self._device) for i in x])
         return x
 
-    def transform_input(self, x: torch.Tensor, image_inverse_transform: torchvision.transforms = None):
+    def transform_input(self, x: torch.Tensor, image_inverse_transform: Callable = None):
         """
        Accepts input image batch in #BCHW form
 
@@ -153,9 +152,8 @@ class NeuralNetPredictor(Predictor):
         raise NotImplementedError()
 
     def show_predictions(self, loader: torch.utils.data.DataLoader,
-                         image_inverse_transform: torchvision.transforms = None,
-                         samples: int = 9, cols: int = 3, figsize: Tuple[int, int] = (10, 10),
-                         target_known: bool = True):
+                         image_inverse_transform: Callable = None, samples: int = 9, cols: int = 3,
+                         figsize: Tuple[int, int] = (10, 10), target_known: bool = True):
         raise NotImplementedError()
 
     def transform_target(self, y: Any):
@@ -273,7 +271,7 @@ class Segmentation(NeuralNetPredictor):
         raise NotImplementedError()
 
     def show_predictions(self, loader: torch.utils.data.DataLoader,
-                         image_inverse_transform: torchvision.transforms = None,
+                         image_inverse_transform: Callable = None,
                          samples: int = 4, cols: int = 3, figsize: Tuple[int, int] = (16, 16),
                          target_known: bool = True):
         self._model = self._model.to(self._device)
@@ -350,7 +348,7 @@ class Segmentation(NeuralNetPredictor):
 
     def write_prediction_to_tensorboard(self, tag: str, loader: torch.utils.data.DataLoader,
                                         writer: torch.utils.tensorboard.SummaryWriter,
-                                        image_inverse_transform: torchvision.transforms,
+                                        image_inverse_transform: Callable,
                                         global_step: int, img_size: Union[int, Tuple[int, int], None] = 224):
         """
         Writes Input, Target and prediction images to the tensorboard if img_size is not None
@@ -397,7 +395,7 @@ class ImageRegression(NeuralNetPredictor):
                                               model_file_name, use_gpu)
 
     def show_predictions(self, loader: torch.utils.data.DataLoader,
-                         image_inverse_transform: torchvision.transforms = None,
+                         image_inverse_transform: Callable = None,
                          samples: int = 9, cols: int = 3, figsize: Tuple[int, int] = (10, 10),
                          target_known: bool = True):
         """
@@ -454,7 +452,7 @@ class ImageRegression(NeuralNetPredictor):
 
     def write_prediction_to_tensorboard(self, tag: str, loader: torch.utils.data.DataLoader,
                                         writer: torch.utils.tensorboard.SummaryWriter,
-                                        image_inverse_transform: torchvision.transforms, global_step: int,
+                                        image_inverse_transform: Callable, global_step: int,
                                         img_size: Union[int, Tuple[int, int], None] = 224):
         """
         Writes prediction to TensorBoard
@@ -572,7 +570,7 @@ class ImageClassification(NeuralNetPredictor):
         return create_text_image(display_content, img_size=img_size, text_color=text_color)
 
     def show_predictions(self, loader: torch.utils.data.DataLoader,
-                         image_inverse_transform: torchvision.transforms = None, samples: int = 9, cols: int = 3,
+                         image_inverse_transform: Callable = None, samples: int = 9, cols: int = 3,
                          figsize: Tuple[int, int] = (10, 10), target_known: bool = True):
         """
         Shows predictions of random samples from loader. Draws matplotlib figure.
