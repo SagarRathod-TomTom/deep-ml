@@ -1,9 +1,11 @@
+from typing import Union, Tuple, List, Callable, Any
 import os
 
 import numpy as np
 import pandas as pd
 from PIL import Image
 import torch
+import torchvision
 
 
 class ImageRowDataFrameDataset(torch.utils.data.Dataset):
@@ -12,12 +14,12 @@ class ImageRowDataFrameDataset(torch.utils.data.Dataset):
         Each row is then reshaped to the provided image_size.
     """
 
-    def __init__(self, dataframe: pd.DataFrame, target_column=None, image_size=(28, 28),
-                 transform=None):
+    def __init__(self, dataframe: pd.DataFrame, target_column: str = None, image_size: Tuple[int, int] = (28, 28),
+                 transform: torchvision.transforms = None):
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.target_column = None
 
-        if target_column is not None:
+        if target_column:
             self.target_column = self.dataframe[target_column]
             self.dataframe.drop(target_column, axis=1, inplace=True)
 
@@ -25,7 +27,7 @@ class ImageRowDataFrameDataset(torch.utils.data.Dataset):
         self.image_size = image_size
         self.transform = transform
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
 
         X = self.dataframe.iloc[index]
 
@@ -47,8 +49,10 @@ class ImageDataFrameDataset(torch.utils.data.Dataset):
     """ This class is useful for reading dataset of images for image classification/regression problem.
     """
 
-    def __init__(self, dataframe, image_file_name_column='image', target_columns=None,
-                 image_dir=None, transforms=None, target_transform=None, open_file_func=None):
+    def __init__(self, dataframe: pd.DataFrame, image_file_name_column: str = 'image', target_columns: Union[int, List[
+        str]] = None, image_dir: str = None, transforms: Union[torchvision.transforms, Callable] = None,
+                 target_transform: Union[torchvision.transforms, Callable] = None,
+                 open_file_func: Callable[[Any], np.ndarray] = None):
 
         self.dataframe = dataframe.reset_index(drop=True, inplace=False)
         self.image_file_name_column = image_file_name_column
@@ -59,10 +63,10 @@ class ImageDataFrameDataset(torch.utils.data.Dataset):
         self.target_transform = target_transform
         self.open_file_func = open_file_func
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.samples
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, Any]:
 
         image_file = self.dataframe.loc[index, self.image_file_name_column]
 
@@ -88,7 +92,8 @@ class ImageDataFrameDataset(torch.utils.data.Dataset):
 
 class ImageListDataset(torch.utils.data.Dataset):
 
-    def __init__(self, image_dir, transforms=None, open_file_func=None):
+    def __init__(self, image_dir: str, transforms: torchvision.transforms = None,
+                 open_file_func: Callable[[Any], Union[np.ndarray, Image]] = None):
 
         self.image_dir = image_dir
         self.images = os.listdir(image_dir)
@@ -98,7 +103,7 @@ class ImageListDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.images)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
 
         image_file = self.images[index]
         if self.open_file_func is None:
@@ -110,6 +115,7 @@ class ImageListDataset(torch.utils.data.Dataset):
             X = self.transforms(X)
 
         return X, image_file
+
 
 class SegmentationDataFrameDataset(torch.utils.data.Dataset):
     """
@@ -124,9 +130,10 @@ class SegmentationDataFrameDataset(torch.utils.data.Dataset):
         and return image, mask
     """
 
-    def __init__(self, dataframe, image_dir, mask_dir=None, image_col='image',
-                 mask_col=None, albu_torch_transforms=None,
-                 target_transform=None, train=True, open_file_func=None):
+    def __init__(self, dataframe: pd.DataFrame, image_dir: str, mask_dir: str = None, image_col: str = 'image',
+                 mask_col: str = None, albu_torch_transforms=None,
+                 target_transform=None, train: bool = True,
+                 open_file_func: Callable[[Any], Union[np.ndarray, Image]] = None):
         """
 
         :param dataframe: the pandas dataframe
