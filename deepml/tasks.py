@@ -467,7 +467,9 @@ class ImageRegression(NeuralNetPredictor):
         :return: None
         """
 
-        if img_size is None:
+        if img_size:
+            assert isinstance(img_size, int) or (isinstance(img_size, tuple) and len(img_size) == 2)
+        else:
             return
 
         if isinstance(img_size, int):
@@ -616,7 +618,11 @@ class ImageClassification(NeuralNetPredictor):
         :param img_size: image size to use while writing image to tensorboard. Default is 224.
         :return: None
         """
-        assert isinstance(img_size, int) or (isinstance(img_size, tuple) and len(img_size) == 2)
+
+        if img_size:
+            assert isinstance(img_size, int) or (isinstance(img_size, tuple) and len(img_size) == 2)
+        else:
+            return
 
         if isinstance(img_size, int):
             img_size = (img_size, img_size)
