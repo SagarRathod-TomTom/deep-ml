@@ -1,33 +1,39 @@
 import os
 import csv
 from collections import OrderedDict, defaultdict
+from typing import List, Tuple, Callable, Union
+
 import numpy as np
 import torch
+import torchvision.transforms
 from tqdm.auto import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
-from deepml.tasks import Predictor
+
+import deepml.tasks
+from deepml.tasks import Task
 from deepml import utils
 
 
 class Learner:
 
-    def __init__(self, predictor, optimizer, criterion, load_optimizer_state=False):
+    def __init__(self, task: Task, optimizer: torch.optim.Optimizer, criterion: torch.nn.Module,
+                 load_optimizer_state: bool = False):
         """
         Training class for learning a model weights using predictor and optimizer.
 
-        :param predictor: Object of sub class deepml.tasks.Predictor
+        :param task: Object of sub class deepml.tasks.Task
         :param optimizer: The optimizer from torch.optim
         :param criterion: The loss function
         :param load_optimizer_state: Weather to load optimizer state to resume model training. Default is False.
                                      If true, optimizer state is loaded with load_state_dict and history of epoch.
         """
 
-        assert isinstance(predictor, Predictor)
+        assert isinstance(task, Task)
         assert isinstance(optimizer, torch.optim.Optimizer)
         assert isinstance(criterion, torch.nn.Module)
 
-        self.__predictor = predictor
+        self.__predictor = task
         self.__model = self.__predictor.model
         self.__model_dir = self.__predictor.model_dir
         self.__model_file_name = self.__predictor.model_file_name
@@ -49,15 +55,15 @@ class Learner:
         self.__device = self.__predictor.device
         self.set_device(self.__device)
 
-    def set_optimizer(self, optimizer):
+    def set_optimizer(self, optimizer: torch.optim.Optimizer):
         assert isinstance(optimizer, torch.optim.Optimizer)
         self.__optimizer = optimizer
 
-    def set_criterion(self, criterion):
+    def set_criterion(self, criterion: torch.nn.Module):
         assert isinstance(criterion, torch.nn.Module)
         self.__criterion = criterion
 
-    def set_device(self, device):
+    def set_device(self, device: str):
         assert isinstance(device, str) and device.lower() in ['cpu', 'cuda']
         device = device.lower()
         self.__device = device if device == "cuda" and torch.cuda.is_available() else "cpu"
@@ -89,7 +95,8 @@ class Learner:
         else:
             print(f'{model_path} does not exist.')
 
-    def save(self, model_file_name, save_optimizer_state=False, epoch=None, train_loss=None, val_loss=None):
+    def save(self, model_file_name: str, save_optimizer_state: bool = False, epoch: int = -1, train_loss: float = None,
+             val_loss: float = None):
         # Convert model into cpu before saving the model state
         self.__model.to("cpu")
         save_dict = {'model': self.__model.state_dict()}
@@ -112,7 +119,8 @@ class Learner:
         self.__model.to(self.__device)
         return filepath
 
-    def validate(self, loader, criterion, metrics=None):
+    def validate(self, loader: torch.utils.data.DataLoader, criterion: torch.nn.Module,
+                 metrics: List[Tuple[str, torch.nn.Module]] = None):
         if loader is None:
             raise Exception('Loader cannot be None.')
 
@@ -144,11 +152,11 @@ class Learner:
 
         return self.__metrics_dict
 
-    def set_predictor(self, predictor):
-        assert isinstance(predictor, Predictor)
+    def set_predictor(self, predictor: deepml.tasks.Task):
+        assert isinstance(predictor, Task)
         self.__predictor = predictor
 
-    def __init_metrics(self, metrics):
+    def __init_metrics(self, metrics: List[Tuple[str, torch.nn.Module]]):
         if metrics is None:
             return
         unique_metrics = set()
@@ -158,7 +166,8 @@ class Learner:
             unique_metrics.add(metric_name)
             self.__metrics_dict[metric_name] = 0
 
-    def __update_metrics(self, outputs, targets, metrics, step):
+    def __update_metrics(self, outputs: torch.Tensor, targets: torch.Tensor, metrics: List[Tuple[str, torch.nn.Module]],
+                         step: int):
 
         if metrics is None:
             return
@@ -168,15 +177,15 @@ class Learner:
                                                ((metric_instance(outputs, targets).item() - self.__metrics_dict[
                                                    metric_name]) / step)
 
-    def __write_metrics_to_tensorboard(self, tag, global_step):
+    def __write_metrics_to_tensorboard(self, tag: str, global_step: int):
         for name, value in self.__metrics_dict.items():
             self.writer.add_scalar(f'{name}/{tag}', value, global_step)
 
-    def __write_history(self, stage):
+    def __write_history(self, stage: str):
         for name, value in self.__metrics_dict.items():
             self.history[f"{stage}_{name}"].append(value)
 
-    def __write_lr(self, global_step):
+    def __write_lr(self, global_step: int):
         # Write lr to tensor-board and history dict
         if len(self.__optimizer.param_groups) == 1:
             param_group = self.__optimizer.param_groups[0]
@@ -188,7 +197,7 @@ class Learner:
                                        global_step)
                 self.history[f'learning_rate/param_group_{index}'].append(param_group['lr'])
 
-    def __write_graph_to_tensorboard(self, loader):
+    def __write_graph_to_tensorboard(self, loader: torch.utils.data.DataLoader):
 
         if not loader:
             return
@@ -208,9 +217,11 @@ class Learner:
             except Exception as e:
                 print("Warning: Failed to write graph to tensorboard.", e)
 
-    def fit(self, train_loader, val_loader=None, epochs=10, steps_per_epoch=None,
-            save_model_after_every_epoch=5, lr_scheduler=None, lr_scheduler_step_policy='epoch',
-            metrics=None, image_inverse_transform=None, tboard_img_size=224):
+    def fit(self, train_loader: torch.utils.data.DataLoader, val_loader: torch.utils.data.DataLoader = None,
+            epochs: int = 10, steps_per_epoch: int = None,
+            save_model_after_every_epoch: int = 5, lr_scheduler=None, lr_scheduler_step_policy: str = 'epoch',
+            metrics: List[Tuple[str, torch.nn.Module]] = None, image_inverse_transform: Callable = None,
+            tensorboard_img_size=Union[int, Tuple[int, int]]):
 
         """
         Trains the model on specified train loader for specified number of epochs.
@@ -247,7 +258,7 @@ class Learner:
                         Metric instance must be subclass of torch.nn.Module, implements forward function and
                         returns calculated value.
 
-        :param tboard_img_size:  image size to use for writing images to tensorboard
+        :param tensorboard_img_size:  image size to use for writing images to tensorboard
         """
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
@@ -329,7 +340,7 @@ class Learner:
             # Write some sample training images to tensorboard
             self.__predictor.write_prediction_to_tensorboard('train', train_loader,
                                                              self.writer, image_inverse_transform,
-                                                             self.epochs_completed, img_size=tboard_img_size)
+                                                             self.epochs_completed, img_size=tensorboard_img_size)
 
             train_loss = self.__metrics_dict['loss']
             self.__write_metrics_to_tensorboard('train', self.epochs_completed)
@@ -346,7 +357,7 @@ class Learner:
                 self.__predictor.write_prediction_to_tensorboard('val', val_loader,
                                                                  self.writer, image_inverse_transform,
                                                                  self.epochs_completed,
-                                                                 img_size=tboard_img_size)
+                                                                 img_size=tensorboard_img_size)
                 # Save best validation model
                 if val_loss < self.best_val_loss:
                     message = message + "[Saving best validation model]"

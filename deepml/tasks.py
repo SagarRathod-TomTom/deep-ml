@@ -14,12 +14,12 @@ from deepml.utils import create_text_image, get_random_samples_batch_from_loader
 from deepml.visualize import plot_images_with_title, plot_images
 
 
-class Predictor(ABC):
+class Task(ABC):
 
     def __init__(self, model: torch.nn.Module, model_dir: str, load_saved_model: bool = False,
                  model_file_name: str = 'latest_model.pt', use_gpu: bool = True):
 
-        super(Predictor, self).__init__()
+        super(Task, self).__init__()
 
         assert isinstance(model, torch.nn.Module)
         assert model_dir is not None
@@ -66,6 +66,9 @@ class Predictor(ABC):
             x = [i.to(self._device) for i in x]
         elif isinstance(x, tuple):  # tuple of torch tensors
             x = tuple([i.to(self._device) for i in x])
+        elif isinstance(x, dict):  # dict values as torch tensors
+            x = {key: value.to(self._device) for key, value in x.items()}
+
         return x
 
     def transform_input(self, x: torch.Tensor, image_inverse_transform: Callable = None):
@@ -111,7 +114,7 @@ class Predictor(ABC):
         pass
 
 
-class NeuralNetPredictor(Predictor):
+class NeuralNetPredictor(Task):
     """
         Use this simple predictor class for any deep learning task.
         It avoids writing to tensorboard and does not apply any transformation
@@ -135,6 +138,7 @@ class NeuralNetPredictor(Predictor):
         """
 
         assert loader is not None and len(loader) > 0
+        self._model.eval()
         self._model = self._model.to(self._device)
         predictions = []
         targets = []
