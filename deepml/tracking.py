@@ -6,9 +6,8 @@ import mlflow
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+import deepml.tasks
 from deepml import utils
-
-from deepml.tasks import Task
 
 
 class MLExperimentLogger(ABC):
@@ -52,7 +51,7 @@ class TensorboardLogger(MLExperimentLogger):
             self.writer.add_images(tag, torch.stack(value), step)
             self.writer.flush()
 
-    def __write_graph_to_tensorboard(self, task: Task, loader: torch.utils.data.DataLoader):
+    def __write_graph_to_tensorboard(self, task: deepml.tasks.Task, loader: torch.utils.data.DataLoader):
 
         if not loader:
             # Write graph to tensorboard
