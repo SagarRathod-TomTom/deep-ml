@@ -5,20 +5,19 @@ from typing import List, Tuple, Callable, Union
 
 import numpy as np
 import torch
-import torchvision.transforms
 from tqdm.auto import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
 
 import deepml.tasks
 from deepml.tasks import Task
-from deepml import utils
+from deepml.tracking import MLExperimentLogger, TensorboardLogger
 
 
 class Learner:
 
     def __init__(self, task: Task, optimizer: torch.optim.Optimizer, criterion: torch.nn.Module,
-                 load_optimizer_state: bool = False):
+                 load_optimizer_state: bool = False, logger: MLExperimentLogger = None):
         """
         Training class for learning a model weights using predictor and optimizer.
 
@@ -42,10 +41,11 @@ class Learner:
         self.epochs_completed = 0
         self.best_val_loss = np.inf
         self.history = defaultdict(list)
+        self.logger = logger
 
-        os.makedirs(self.__model_dir, exist_ok=True)
-        self.writer = SummaryWriter(os.path.join(self.__model_dir,
-                                                 utils.find_new_run_dir_name(self.__model_dir)))
+        if self.logger is None:
+            os.makedirs(self.__model_dir, exist_ok=True)
+            self.logger = TensorboardLogger(self.__model_dir)
 
         self.__metrics_dict = OrderedDict({'loss': 0})
 
@@ -95,7 +95,7 @@ class Learner:
         else:
             print(f'{model_path} does not exist.')
 
-    def save(self, model_file_name: str, save_optimizer_state: bool = False, epoch: int = -1, train_loss: float = None,
+    def save(self, tag: str, save_optimizer_state: bool = False, epoch: int = -1, train_loss: float = None,
              val_loss: float = None):
         # Convert model into cpu before saving the model state
         self.__model.to("cpu")
@@ -113,9 +113,10 @@ class Learner:
 
         save_dict['criterion'] = self.__criterion.__class__.__name__
 
-        filepath = os.path.join(self.__model_dir, model_file_name)
-        torch.save(save_dict, filepath)
+        filepath = os.path.join(self.__model_dir, tag)
+        torch.save(save_dict, f"{filepath}.pt")
 
+        self.logger.log_artifact(tag, save_dict, epoch)
         self.__model.to(self.__device)
         return filepath
 
@@ -177,9 +178,9 @@ class Learner:
                                                ((metric_instance(outputs, targets).item() - self.__metrics_dict[
                                                    metric_name]) / step)
 
-    def __write_metrics_to_tensorboard(self, tag: str, global_step: int):
+    def __write_metrics_to_logger(self, tag: str, global_step: int):
         for name, value in self.__metrics_dict.items():
-            self.writer.add_scalar(f'{name}/{tag}', value, global_step)
+            self.logger.log_metric(f'{name}/{tag}', value, global_step)
 
     def __write_history(self, stage: str):
         for name, value in self.__metrics_dict.items():
@@ -189,39 +190,19 @@ class Learner:
         # Write lr to tensor-board and history dict
         if len(self.__optimizer.param_groups) == 1:
             param_group = self.__optimizer.param_groups[0]
-            self.writer.add_scalar('learning_rate', param_group['lr'], global_step)
+            self.logger.log_metric('learning_rate', param_group['lr'], global_step)
             self.history['learning_rate'].append(param_group['lr'])
         else:
             for index, param_group in enumerate(self.__optimizer.param_groups):
-                self.writer.add_scalar(f'learning_rate/param_group_{index}', param_group['lr'],
+                self.logger.log_metric(f'learning_rate/param_group_{index}', param_group['lr'],
                                        global_step)
                 self.history[f'learning_rate/param_group_{index}'].append(param_group['lr'])
-
-    def __write_graph_to_tensorboard(self, loader: torch.utils.data.DataLoader):
-
-        if not loader:
-            return
-
-        # Write graph to tensorboard
-        temp_x = None
-        for X, _ in loader:
-            temp_x = X
-            break
-
-        temp_x = self.__predictor.models_input_to_device(temp_x)
-
-        with torch.no_grad():
-            self.__model.eval()
-            try:
-                self.writer.add_graph(self.__model, temp_x)
-            except Exception as e:
-                print("Warning: Failed to write graph to tensorboard.", e)
 
     def fit(self, train_loader: torch.utils.data.DataLoader, val_loader: torch.utils.data.DataLoader = None,
             epochs: int = 10, steps_per_epoch: int = None,
             save_model_after_every_epoch: int = 5, lr_scheduler=None, lr_scheduler_step_policy: str = 'epoch',
             metrics: List[Tuple[str, torch.nn.Module]] = None, image_inverse_transform: Callable = None,
-            tensorboard_img_size=Union[int, Tuple[int, int]]):
+            logger_img_size=Union[int, Tuple[int, int]]):
 
         """
         Trains the model on specified train loader for specified number of epochs.
@@ -258,7 +239,7 @@ class Learner:
                         Metric instance must be subclass of torch.nn.Module, implements forward function and
                         returns calculated value.
 
-        :param tensorboard_img_size:  image size to use for writing images to tensorboard
+        :param logger_img_size:  image size to use for writing images to tensorboard
         """
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
@@ -268,8 +249,9 @@ class Learner:
         self.__model.to(self.__device)
         self.__criterion = self.__criterion.to(self.__device)
 
-        # Write graph to tensorboard
-        self.__write_graph_to_tensorboard(val_loader)
+        # Log params
+        self.logger.log_params(task=self.__predictor, loader=val_loader, epochs=epochs, criterion=self.__criterion,
+                               lr_scheduler=lr_scheduler)
 
         # Check valid metrics types
         if metrics:
@@ -299,7 +281,7 @@ class Learner:
             self.__metrics_dict['loss'] = 0
             self.__init_metrics(metrics)
 
-            # Write current lr to tensor-board
+            # Write current lr to logger
             self.__write_lr(epoch + 1)
 
             bar = tqdm(total=steps_per_epoch, desc="{:12s}".format('Training'))
@@ -337,32 +319,32 @@ class Learner:
 
             self.epochs_completed = self.epochs_completed + 1
 
-            # Write some sample training images to tensorboard
-            self.__predictor.write_prediction_to_tensorboard('train', train_loader,
-                                                             self.writer, image_inverse_transform,
-                                                             self.epochs_completed, img_size=tensorboard_img_size)
+            # Write some sample training images to logger
+            self.__predictor.write_prediction_to_logger('train', train_loader,
+                                                        self.logger, image_inverse_transform,
+                                                        self.epochs_completed, img_size=logger_img_size)
 
             train_loss = self.__metrics_dict['loss']
-            self.__write_metrics_to_tensorboard('train', self.epochs_completed)
+            self.__write_metrics_to_logger('train', self.epochs_completed)
             self.__write_history('train')
             message = f"Training Loss: {train_loss:.4f} "
             val_loss = np.inf
             if val_loader is not None:
                 self.validate(val_loader, self.__criterion, metrics)
                 val_loss = self.__metrics_dict['loss']
-                self.__write_metrics_to_tensorboard('val', self.epochs_completed)
+                self.__write_metrics_to_logger('val', self.epochs_completed)
                 self.__write_history('val')
                 message = message + f"Validation Loss: {val_loss:.4f} "
                 # write random val images to tensorboard
-                self.__predictor.write_prediction_to_tensorboard('val', val_loader,
-                                                                 self.writer, image_inverse_transform,
-                                                                 self.epochs_completed,
-                                                                 img_size=tensorboard_img_size)
+                self.__predictor.write_prediction_to_logger('val', val_loader,
+                                                            self.logger, image_inverse_transform,
+                                                            self.epochs_completed,
+                                                            img_size=logger_img_size)
                 # Save best validation model
                 if val_loss < self.best_val_loss:
                     message = message + "[Saving best validation model]"
                     self.best_val_loss = val_loss
-                    self.save('best_val_model.pt',
+                    self.save('best_val_model',
                               save_optimizer_state=True,
                               epoch=self.epochs_completed,
                               train_loss=train_loss,
@@ -374,15 +356,14 @@ class Learner:
                 else:
                     lr_scheduler.step()
 
-            self.writer.flush()
             print(message)
             if self.epochs_completed % save_model_after_every_epoch == 0:
-                model_file_name = "model_epoch_{}.pt".format(self.epochs_completed)
-                self.save(model_file_name, save_optimizer_state=True, epoch=self.epochs_completed,
+                model_tag_name = "epoch_{}_model".format(self.epochs_completed)
+                self.save(model_tag_name, save_optimizer_state=True, epoch=self.epochs_completed,
                           train_loss=train_loss, val_loss=val_loss)
 
         # Save latest model at the end
-        self.save("latest_model.pt", save_optimizer_state=True, epoch=self.epochs_completed,
+        self.save("latest_model", save_optimizer_state=True, epoch=self.epochs_completed,
                   train_loss=train_loss, val_loss=self.best_val_loss)
 
     def predict(self, loader):

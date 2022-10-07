@@ -10,6 +10,7 @@ import torchvision
 from PIL import Image
 from tqdm.auto import tqdm
 
+from deepml.tracking import MLExperimentLogger
 from deepml.utils import create_text_image, get_random_samples_batch_from_loader
 from deepml.visualize import plot_images_with_title, plot_images
 
@@ -109,8 +110,8 @@ class Task(ABC):
         pass
 
     @abstractmethod
-    def write_prediction_to_tensorboard(self, tag, loader, writer, image_inverse_transform,
-                                        global_step, img_size=224):
+    def write_prediction_to_logger(self, tag, loader, logger, image_inverse_transform,
+                                   global_step, img_size=224):
         pass
 
 
@@ -167,8 +168,8 @@ class NeuralNetPredictor(Task):
     def transform_output(self, prediction):
         raise NotImplementedError()
 
-    def write_prediction_to_tensorboard(self, tag, loader, writer, image_inverse_transform,
-                                        global_step, img_size=224):
+    def write_prediction_to_logger(self, tag, loader, logger, image_inverse_transform,
+                                   global_step, img_size=224):
         pass
 
 
@@ -351,42 +352,40 @@ class Segmentation(NeuralNetPredictor):
 
         return torch.stack(decoded_images)
 
-    def write_prediction_to_tensorboard(self, tag: str, loader: torch.utils.data.DataLoader,
-                                        writer: SummaryWriter,
-                                        image_inverse_transform: Callable,
-                                        global_step: int, img_size: Union[int, Tuple[int, int], None] = 224):
+    def write_prediction_to_logger(self, tag: str, loader: torch.utils.data.DataLoader,
+                                   logger: MLExperimentLogger,
+                                   image_inverse_transform: Callable,
+                                   global_step: int, img_size: Union[int, Tuple[int, int], None] = 224):
         """
         Writes Input, Target and prediction images to the tensorboard if img_size is not None
         :param tag:
         :param loader:
-        :param writer:
+        :param logger:
         :param image_inverse_transform:
         :param global_step:
         :param img_size:
         :return:
         """
 
-        if img_size is None:
-            return
+        if img_size is not None:
+            self._model = self._model.to(self._device)
+            self._model.eval()
 
-        self._model = self._model.to(self._device)
-        self._model.eval()
+            with torch.no_grad():
+                x, targets = get_random_samples_batch_from_loader(loader)
+                predictions = self.predict_batch(x).cpu()
 
-        with torch.no_grad():
-            x, targets = get_random_samples_batch_from_loader(loader)
-            predictions = self.predict_batch(x).cpu()
+                x = self.transform_input(x, image_inverse_transform)
+                target_mask = self.decode_segmentation_mask(targets)
+                class_indices = self.transform_output(predictions)
+                output_mask = self.decode_segmentation_mask(class_indices)
 
-            x = self.transform_input(x, image_inverse_transform)
-            target_mask = self.decode_segmentation_mask(targets)
-            class_indices = self.transform_output(predictions)
-            output_mask = self.decode_segmentation_mask(class_indices)
+                target_mask = target_mask.to(torch.uint8)
+                output_mask = output_mask.to(torch.uint8)
 
-            target_mask = target_mask.to(torch.uint8)
-            output_mask = output_mask.to(torch.uint8)
-
-            writer.add_images(f"{tag} Input Image", x, global_step)
-            writer.add_images(f"{tag} Target Mask", target_mask, global_step)
-            writer.add_images(f"{tag} Output Mask", output_mask, global_step)
+                logger.log_artifact(f"{tag} Input Image", x, global_step)
+                logger.log_artifact(f"{tag} Target Mask", target_mask, global_step)
+                logger.log_artifact(f"{tag} Output Mask", output_mask, global_step)
 
 
 class ImageRegression(NeuralNetPredictor):
@@ -455,16 +454,16 @@ class ImageRegression(NeuralNetPredictor):
         """
         return round(prediction.item(), 2)
 
-    def write_prediction_to_tensorboard(self, tag: str, loader: torch.utils.data.DataLoader,
-                                        writer: SummaryWriter,
-                                        image_inverse_transform: Callable, global_step: int,
-                                        img_size: Union[int, Tuple[int, int], None] = 224):
+    def write_prediction_to_logger(self, tag: str, loader: torch.utils.data.DataLoader,
+                                   logger: MLExperimentLogger,
+                                   image_inverse_transform: Callable, global_step: int,
+                                   img_size: Union[int, Tuple[int, int], None] = 224):
         """
         Writes prediction to TensorBoard
 
         :param tag: unique tag
         :param loader: the torch data loader
-        :param writer: tensorboard writer object
+        :param logger: tensorboard writer object
         :param image_inverse_transform: reverse image transform
         :param global_step: the epoch value
         :param img_size: image size to use while writing image to tensorboard. Default is 224.
@@ -507,7 +506,7 @@ class ImageRegression(NeuralNetPredictor):
                     output_images.append(x[index].squeeze(dim=0))
                 output_images.append(to_tensor(content_image))
 
-            writer.add_images(f'{tag}', torch.stack(output_images), global_step)
+            logger.log_artifact(f'{tag}', torch.stack(output_images), global_step)
 
     def predict_class(self, loader):
         raise NotImplementedError()
@@ -609,14 +608,14 @@ class ImageClassification(NeuralNetPredictor):
 
             plot_images_with_title(image_title_generator, samples=samples, cols=cols, figsize=figsize)
 
-    def write_prediction_to_tensorboard(self, tag, loader, writer, image_inverse_transform,
-                                        global_step, img_size=224):
+    def write_prediction_to_logger(self, tag: str, loader, logger: MLExperimentLogger, image_inverse_transform,
+                                   global_step: int, img_size=224):
         """
         Writes prediction to TensorBoard
 
         :param tag: unique tag
         :param loader: the torch data loader
-        :param writer: tensorboard writer object
+        :param logger: tensorboard writer object
         :param image_inverse_transform: reverse image transform
         :param global_step: the epoch value
         :param img_size: image size to use while writing image to tensorboard. Default is 224.
@@ -655,7 +654,7 @@ class ImageClassification(NeuralNetPredictor):
 
                 output_images.append(to_tensor(content_image))
 
-            writer.add_images(f'{tag}', torch.stack(output_images), global_step)
+            logger.log_artifact(f'{tag}', torch.stack(output_images), global_step)
 
 
 class MultiLabelImageClassification(ImageClassification):
