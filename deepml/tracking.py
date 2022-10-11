@@ -88,4 +88,3 @@ class MLFlowLogger(MLExperimentLogger):
 
         if isinstance(value, dict):
             mlflow.pytorch.log_model(value, tag)
-
