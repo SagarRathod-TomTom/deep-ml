@@ -5,7 +5,7 @@ from typing import List, Tuple, Callable, Union
 
 import numpy as np
 import torch
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
 
