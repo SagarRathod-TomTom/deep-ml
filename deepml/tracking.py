@@ -71,7 +71,10 @@ class TensorboardLogger(MLExperimentLogger):
 
 class MLFlowLogger(MLExperimentLogger):
 
-    import mlflow
+    try:
+        import mlflow
+    except ImportError as e:
+        print(e)
 
     def __init__(self, experiment_name: str = "Default", tracking_uri: str = None):
         super().__init__()

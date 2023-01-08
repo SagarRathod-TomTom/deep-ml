@@ -1,0 +1,15 @@
+artifact_uri: file:///Users/rathods/Documents/Github/deep-ml/mlruns/0/db658b3ec65e4b98ad00889694679511/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: db658b3ec65e4b98ad00889694679511
+run_uuid: db658b3ec65e4b98ad00889694679511
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1673176623343
+status: 1
+tags: []
+user_id: rathods
