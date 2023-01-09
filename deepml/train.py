@@ -113,10 +113,10 @@ class Learner:
 
         save_dict['criterion'] = self.__criterion.__class__.__name__
 
-        filepath = os.path.join(self.__model_dir, tag)
-        torch.save(save_dict, f"{filepath}.pt")
+        filepath = f"{os.path.join(self.__model_dir, tag)}.pt"
+        torch.save(save_dict, filepath)
 
-        self.logger.log_artifact(tag, self.__model, epoch)
+        self.logger.log_artifact(tag, self.__model, epoch, artifact_path=filepath)
         self.__model.to(self.__device)
         return filepath
 

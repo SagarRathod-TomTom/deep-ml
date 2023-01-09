@@ -114,10 +114,9 @@ class WandbLogger(MLExperimentLogger):
 
     def log_artifact(self, tag: str, value: Any, step: int, artifact_path: Optional[str] = None):
         if artifact_path and os.path.exists(artifact_path):
-            # artifact = self.wandb.Artifact(name=tag, type='model_weights')
-            # artifact.add_file(local_path=artifact_path, name=tag)
-            # self.wandb.log_artifact(artifact)
-            pass
+            artifact = self.wandb.Artifact(name=tag, type='model_weights')
+            artifact.add_file(local_path=artifact_path, name=tag)
+            self.wandb.log_artifact(artifact)
 
         if isinstance(value, torch.Tensor) and value.ndim == 4:
             # TODO: log image
