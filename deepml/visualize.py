@@ -145,7 +145,7 @@ def show_images_from_dataframe(dataframe, img_dir=None, image_file_name_column="
     :return: None
     """
     samples = dataframe.sample(samples)
-    image_generator = ((row_data[image_filepath_column] if image_filepath_column else
+    image_generator = ((Image.open(row_data[image_filepath_column]) if image_filepath_column else
                         Image.open(os.path.join(img_dir, row_data[image_file_name_column])),
                         row_data[label_column], title_color)
                        for _, row_data in samples.iterrows())
