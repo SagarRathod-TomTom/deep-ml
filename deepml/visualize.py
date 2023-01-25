@@ -128,7 +128,7 @@ def show_images_from_folder(img_dir, images=None, samples=9, cols=3, figsize=(10
 
 
 def show_images_from_dataframe(dataframe, img_dir=None, image_file_name_column="image",
-                               label_column='label', samples=9, cols=3, figsize=(10, 10),
+                               label_column='label', image_filepath_column=None, samples=9, cols=3, figsize=(10, 10),
                                title_color=None):
     """
     Displays random samples of images from a dataframe using matplotlib figure.
@@ -137,6 +137,7 @@ def show_images_from_dataframe(dataframe, img_dir=None, image_file_name_column="
                     to contain full path to the image file.
     :param image_file_name_column: The name of the column containing image file names. Default is "image".
     :param label_column: The label columns containing the title for image file to be displayed. Default is 'label'.
+    :param image_filepath_column: Direct filepath str as an attribute
     :param samples: The number of random image samples to display. Default is 9.
     :param cols: The number of display columns in the matplotlib figure. Default is 3.
     :param figsize: The matplotlib figure size. Default is (10,10)
@@ -144,7 +145,8 @@ def show_images_from_dataframe(dataframe, img_dir=None, image_file_name_column="
     :return: None
     """
     samples = dataframe.sample(samples)
-    image_generator = ((Image.open(os.path.join(img_dir, row_data[image_file_name_column])),
+    image_generator = ((row_data[image_filepath_column] if image_filepath_column else
+                        Image.open(os.path.join(img_dir, row_data[image_file_name_column])),
                         row_data[label_column], title_color)
                        for _, row_data in samples.iterrows())
     plot_images_with_title(image_generator, len(samples), cols=cols, figsize=figsize)
