@@ -43,6 +43,7 @@ class Task(ABC):
             state_dict = (torch.load(weights_file_path) if torch.cuda.is_available() else
                           torch.load(weights_file_path, map_location=torch.device('cpu')))
             self._model.load_state_dict(state_dict['model'])
+            print("Model Weights Successfully Loaded!")
 
     @property
     def model(self):
@@ -60,15 +61,15 @@ class Task(ABC):
     def model_file_name(self):
         return self._model_file_name
 
-    def models_input_to_device(self, x: Union[torch.Tensor, list, tuple]):
+    def models_input_to_device(self, x: Union[torch.Tensor, list, tuple], non_blocking=False):
         if isinstance(x, torch.Tensor):
-            x = x.to(self._device)
+            x = x.to(self._device, non_blocking)
         elif isinstance(x, list):  # list of torch tensors
-            x = [i.to(self._device) for i in x]
+            x = [i.to(self._device, non_blocking) for i in x]
         elif isinstance(x, tuple):  # tuple of torch tensors
-            x = tuple([i.to(self._device) for i in x])
+            x = tuple([i.to(self._device, non_blocking) for i in x])
         elif isinstance(x, dict):  # dict values as torch tensors
-            x = {key: value.to(self._device) for key, value in x.items()}
+            x = {key: value.to(self._device, non_blocking) for key, value in x.items()}
 
         return x
 
@@ -93,7 +94,7 @@ class Task(ABC):
         pass
 
     @abstractmethod
-    def predict_batch(self, x):
+    def predict_batch(self, x, *args, **kwargs):
         pass
 
     @abstractmethod
@@ -115,7 +116,7 @@ class Task(ABC):
         pass
 
 
-class NeuralNetPredictor(Task):
+class NeuralNetTask(Task):
     """
         Use this simple predictor class for any deep learning task.
         It avoids writing to tensorboard and does not apply any transformation
@@ -124,11 +125,11 @@ class NeuralNetPredictor(Task):
 
     def __init__(self, model: torch.nn.Module, model_dir: str, load_saved_model: bool = False,
                  model_file_name: str = 'latest_model.pt', use_gpu: bool = True):
-        super(NeuralNetPredictor, self).__init__(model, model_dir, load_saved_model,
-                                                 model_file_name, use_gpu)
+        super(NeuralNetTask, self).__init__(model, model_dir, load_saved_model,
+                                            model_file_name, use_gpu)
 
-    def predict_batch(self, x: torch.Tensor):
-        x = self.models_input_to_device(x)
+    def predict_batch(self, x: torch.Tensor, *args, **kwargs):
+        x = self.models_input_to_device(x, *args, **kwargs)
         return self._model(x)
 
     def predict(self, loader: torch.utils.data.DataLoader):
@@ -145,7 +146,7 @@ class NeuralNetPredictor(Task):
         targets = []
         with torch.no_grad():
             for x, y in tqdm(loader, total=len(loader), desc="{:12s}".format('Prediction')):
-                y_pred = self.predict_batch(x).cpu()
+                y_pred = self.predict_batch(x)
                 predictions.append(y_pred)
                 targets.append(y)
 
@@ -173,7 +174,7 @@ class NeuralNetPredictor(Task):
         pass
 
 
-class Segmentation(NeuralNetPredictor):
+class Segmentation(NeuralNetTask):
     """
     This class is useful for binary and Multiclass pixel segmentation.
     """
@@ -231,8 +232,10 @@ class Segmentation(NeuralNetPredictor):
 
         self.palette = self.palette + list(np.zeros(768 - (len(self.palette)), dtype=np.int).tolist())
 
-    def predict_batch(self, x: Union[torch.Tensor, np.ndarray]) -> torch.Tensor:
-        x = self.models_input_to_device(x)
+    def predict_batch(self, x: Union[torch.Tensor, np.ndarray], *args, **kwargs) -> torch.Tensor:
+        x = (self.models_input_to_device(x) if "non_blocking" not in kwargs
+             else self.models_input_to_device(x, kwargs["non_blocking"]))
+
         pred = self._model(x)
 
         if isinstance(pred, dict) and 'out' in pred:
@@ -388,7 +391,7 @@ class Segmentation(NeuralNetPredictor):
                 logger.log_artifact(f"{tag} Output Mask", output_mask, global_step)
 
 
-class ImageRegression(NeuralNetPredictor):
+class ImageRegression(NeuralNetTask):
     """
     The class useful to perform image regression.
     """
@@ -512,7 +515,7 @@ class ImageRegression(NeuralNetPredictor):
         raise NotImplementedError()
 
 
-class ImageClassification(NeuralNetPredictor):
+class ImageClassification(NeuralNetTask):
     """
     The class useful for image classification task.
     """

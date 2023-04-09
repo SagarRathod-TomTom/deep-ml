@@ -121,7 +121,7 @@ class Learner:
         return filepath
 
     def validate(self, loader: torch.utils.data.DataLoader, criterion: torch.nn.Module,
-                 metrics: List[Tuple[str, torch.nn.Module]] = None):
+                 metrics: List[Tuple[str, torch.nn.Module]] = None, non_blocking=False):
         if loader is None:
             raise Exception('Loader cannot be None.')
 
@@ -134,7 +134,7 @@ class Learner:
         with torch.no_grad():
             for batch_index, (x, y) in enumerate(loader):
 
-                outputs = self.__predictor.predict_batch(x)
+                outputs = self.__predictor.predict_batch(x, non_blocking)
 
                 if isinstance(y, torch.Tensor):
                     y = y.to(self.__device)
@@ -172,11 +172,11 @@ class Learner:
 
         if metrics is None:
             return
-
-        for metric_name, metric_instance in metrics:
-            self.__metrics_dict[metric_name] = self.__metrics_dict[metric_name] + \
-                                               ((metric_instance(outputs, targets).item() - self.__metrics_dict[
-                                                   metric_name]) / step)
+        with torch.no_grad():
+            for metric_name, metric_instance in metrics:
+                self.__metrics_dict[metric_name] = self.__metrics_dict[metric_name] + \
+                                                   ((metric_instance(outputs, targets).item() - self.__metrics_dict[
+                                                       metric_name]) / step)
 
     def __write_metrics_to_logger(self, tag: str, global_step: int):
         for name, value in self.__metrics_dict.items():
@@ -202,7 +202,8 @@ class Learner:
             epochs: int = 10, steps_per_epoch: int = None,
             save_model_after_every_epoch: int = 5, lr_scheduler=None, lr_scheduler_step_policy: str = 'epoch',
             metrics: List[Tuple[str, torch.nn.Module]] = None, image_inverse_transform: Callable = None,
-            logger_img_size=Union[int, Tuple[int, int]]):
+            logger_img_size=Union[int, Tuple[int, int]],
+            non_blocking=False):
 
         """
         Trains the model on specified train loader for specified number of epochs.
@@ -240,6 +241,8 @@ class Learner:
                         returns calculated value.
 
         :param logger_img_size:  image size to use for writing images to tensorboard
+
+        :param non_blocking:  weather to enable asynchronous cuda tensor transfer
         """
         if steps_per_epoch is None:
             steps_per_epoch = len(train_loader)
@@ -290,7 +293,7 @@ class Learner:
                 # zero the parameter gradients
                 self.__optimizer.zero_grad()
 
-                outputs = self.__predictor.predict_batch(x)
+                outputs = self.__predictor.predict_batch(x, non_blocking)
 
                 if isinstance(y, torch.Tensor):
                     y = y.to(self.__device)
