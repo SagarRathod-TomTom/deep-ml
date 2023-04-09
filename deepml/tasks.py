@@ -63,13 +63,13 @@ class Task(ABC):
 
     def models_input_to_device(self, x: Union[torch.Tensor, list, tuple], non_blocking=False):
         if isinstance(x, torch.Tensor):
-            x = x.to(self._device, non_blocking)
+            x = x.to(self._device, non_blocking=non_blocking)
         elif isinstance(x, list):  # list of torch tensors
-            x = [i.to(self._device, non_blocking) for i in x]
+            x = [i.to(self._device, non_blocking=non_blocking) for i in x]
         elif isinstance(x, tuple):  # tuple of torch tensors
-            x = tuple([i.to(self._device, non_blocking) for i in x])
+            x = tuple([i.to(self._device, non_blocking=non_blocking) for i in x])
         elif isinstance(x, dict):  # dict values as torch tensors
-            x = {key: value.to(self._device, non_blocking) for key, value in x.items()}
+            x = {key: value.to(self._device, non_blocking=non_blocking) for key, value in x.items()}
 
         return x
 
