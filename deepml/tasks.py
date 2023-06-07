@@ -228,9 +228,9 @@ class Segmentation(NeuralNetTask):
         if self.num_classes == 1:
             self.palette = [0, 0, 0, 255, 255, 255]
         else:
-            self.palette = np.array(list(self.class_index_to_color.values())).flatten().astype(np.int).tolist()
+            self.palette = np.array(list(self.class_index_to_color.values())).flatten().astype(np.uint8).tolist()
 
-        self.palette = self.palette + list(np.zeros(768 - (len(self.palette)), dtype=np.int).tolist())
+        self.palette = self.palette + list(np.zeros(768 - (len(self.palette)), dtype=np.uint8).tolist())
 
     def predict_batch(self, x: Union[torch.Tensor, np.ndarray], *args, **kwargs) -> torch.Tensor:
         x = (self.models_input_to_device(x) if "non_blocking" not in kwargs
