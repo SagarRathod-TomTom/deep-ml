@@ -35,6 +35,22 @@ class RMSELoss(torch.nn.Module):
         return torch.sqrt(self.mse(output, target) + self.eps)
 
 
+class WeightedBCEWithLogitsLoss(torch.nn.Module):
+
+    def __init__(self, w_p = None, w_n = None):
+        super(WeightedBCEWithLogitsLoss, self).__init__()
+        self.w_p = w_p
+        self.w_n = w_n
+
+    def forward(self, logits, labels, epsilon = 1e-7):
+
+        ps = torch.sigmoid(logits.squeeze())
+        loss_pos = -1 * torch.mean(self.w_p * labels * torch.log(ps + epsilon))
+        loss_neg = -1 * torch.mean(self.w_n * (1-labels) * torch.log((1-ps) + epsilon))
+        loss = loss_pos + loss_neg
+        return loss
+
+
 class ContrastiveLoss(torch.nn.Module):
     def __init__(self, margin=2.0, distance_func=None, label_transform=None):
         """
@@ -50,16 +66,16 @@ class ContrastiveLoss(torch.nn.Module):
 
     def forward(self, embeddings: torch.Tensor, label: torch.Tensor):
         """
-         label should be zero for positive pair image
-         label should be 1 for negative image
+         label should be 1 for positive pair image
+         label should be 0 for negative image
         """
         embeddings1, embeddings2 = embeddings
         distance = self.distance_func(embeddings) if self.distance_func else F.pairwise_distance(embeddings1,
                                                                                                  embeddings2)
         label = self.label_transform(label) if self.label_transform else label
 
-        pos = (1 - label) * torch.pow(distance, 2)
-        neg = label * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2)
+        pos = label * torch.pow(distance, 2)
+        neg = (1 - label) * torch.pow(torch.clamp(self.margin - distance, min=0.0), 2)
         loss_contrastive = torch.mean(pos + neg)
         return loss_contrastive
 
