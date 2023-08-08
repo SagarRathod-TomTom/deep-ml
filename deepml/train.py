@@ -134,7 +134,7 @@ class Learner:
         with torch.no_grad():
             for batch_index, (x, y) in enumerate(loader):
 
-                outputs = self.__predictor.predict_batch(x, non_blocking)
+                outputs = self.__predictor.predict_batch(x, y, non_blocking)
 
                 if isinstance(y, torch.Tensor):
                     y = y.to(self.__device)
@@ -293,10 +293,10 @@ class Learner:
                 # zero the parameter gradients
                 self.__optimizer.zero_grad()
 
-                outputs = self.__predictor.predict_batch(x, y, non_blocking)
-
                 if isinstance(y, torch.Tensor):
                     y = y.to(self.__device)
+
+                outputs = self.__predictor.predict_batch(x, y, non_blocking)
 
                 if isinstance(outputs, torch.Tensor) and outputs.ndim == 2 and outputs.shape[1] == 1:
                     y = y.view_as(outputs)

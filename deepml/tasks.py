@@ -61,7 +61,7 @@ class Task(ABC):
     def model_file_name(self):
         return self._model_file_name
 
-    def models_input_to_device(self, x: Union[torch.Tensor, list, tuple], non_blocking=False):
+    def move_input_to_device(self, x: Union[torch.Tensor, list, tuple], non_blocking=False):
         if isinstance(x, torch.Tensor):
             x = x.to(self._device, non_blocking=non_blocking)
         elif isinstance(x, list):  # list of torch tensors
@@ -129,7 +129,7 @@ class NeuralNetTask(Task):
                                             model_file_name, use_gpu)
 
     def predict_batch(self, x: torch.Tensor, *args, **kwargs):
-        x = self.models_input_to_device(x, *args, **kwargs)
+        x = self.move_input_to_device(x, *args, **kwargs)
         return self._model(x)
 
     def predict(self, loader: torch.utils.data.DataLoader):
@@ -233,8 +233,8 @@ class Segmentation(NeuralNetTask):
         self.palette = self.palette + list(np.zeros(768 - (len(self.palette)), dtype=np.uint8).tolist())
 
     def predict_batch(self, x: Union[torch.Tensor, np.ndarray], *args, **kwargs) -> torch.Tensor:
-        x = (self.models_input_to_device(x) if "non_blocking" not in kwargs
-             else self.models_input_to_device(x, kwargs["non_blocking"]))
+        x = (self.move_input_to_device(x) if "non_blocking" not in kwargs
+             else self.move_input_to_device(x, kwargs["non_blocking"]))
 
         pred = self._model(x)
 

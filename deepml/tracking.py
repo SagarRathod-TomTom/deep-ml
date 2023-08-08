@@ -58,7 +58,7 @@ class TensorboardLogger(MLExperimentLogger):
                 temp_x = X
                 break
 
-            temp_x = task.models_input_to_device(temp_x)
+            temp_x = task.move_input_to_device(temp_x)
 
             with torch.no_grad():
                 task.model.eval()
