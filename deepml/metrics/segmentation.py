@@ -43,6 +43,7 @@ class IoU(torch.nn.Module):
 
     def __init__(self, is_multiclass=False, epsilon=1e-6):
         super(IoU, self).__init__()
+        self.is_multiclass = is_multiclass
         if is_multiclass:
             self.activation = torch.nn.Softmax2d()
         else:
@@ -52,10 +53,33 @@ class IoU(torch.nn.Module):
     def forward(self, output, target):
 
         output = self.activation(output)
+
+        if self.is_multiclass:
+            probs, output = torch.max(output, dim=-3)
+
         intersection = torch.sum(output * target)
         union = torch.sum(output) + torch.sum(target)
-        
+
         # calculate mean over batch
         jac = (intersection / (union - intersection + self.epsilon)).mean()
         return jac
 
+
+class Precision(torch.nn.Module):
+
+    def __init__(self, threshold=0.5, mode="Binary", epsilon=1e-6):
+        super(Precision, self).__init__()
+        self.activation = torch.nn.Softmax2d()
+        self.threshold = threshold
+        self.epsilon = epsilon
+
+    def forward(self, output, target):
+        target_vertex_mask, _ = target
+        output = output[:, :2, :, :]
+        logits = self.activation(output).cpu()
+
+        probs, indices = torch.max(logits, dim=-3)
+
+        tp = true_positives(indices, target_vertex_mask)
+        fp = false_positives(indices, target_vertex_mask)
+        return tp / (tp + fp + self.epsilon)

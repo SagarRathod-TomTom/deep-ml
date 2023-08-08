@@ -293,7 +293,7 @@ class Learner:
                 # zero the parameter gradients
                 self.__optimizer.zero_grad()
 
-                outputs = self.__predictor.predict_batch(x, non_blocking)
+                outputs = self.__predictor.predict_batch(x, y, non_blocking)
 
                 if isinstance(y, torch.Tensor):
                     y = y.to(self.__device)
