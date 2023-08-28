@@ -1,7 +1,7 @@
 import os
 import csv
 from collections import OrderedDict, defaultdict
-from typing import List, Tuple, Callable, Union, Dict
+from typing import Tuple, Callable, Union, Dict
 
 import numpy as np
 import torch

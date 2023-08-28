@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 import torchvision
 from PIL import Image
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from deepml.tracking import MLExperimentLogger
 from deepml.utils import create_text_image, get_random_samples_batch_from_loader
@@ -188,7 +188,6 @@ class NeuralNetTask(Task):
         metrics_dict = {metric_name: 0 for metric_name in metrics.keys()}
 
         bar = tqdm(total=len(loader), desc="{:12s}".format('Evaluation'))
-
         for batch_index, (x, y) in enumerate(loader):
 
             outputs = self.predict_batch(x, y, non_blocking)
