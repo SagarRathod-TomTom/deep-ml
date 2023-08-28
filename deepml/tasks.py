@@ -185,7 +185,7 @@ class NeuralNetTask(Task):
             raise Exception('Loader cannot be None.')
 
         self._model.eval()
-        metrics_dict = {metric_name: 0 for metric_name, _ in metrics}
+        metrics_dict = {metric_name: 0 for metric_name in metrics.keys()}
 
         bar = tqdm(total=len(loader), desc="{:12s}".format('Evaluation'))
 
