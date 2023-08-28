@@ -1,7 +1,7 @@
 import os
 import csv
 from collections import OrderedDict, defaultdict
-from typing import List, Tuple, Callable, Union
+from typing import List, Tuple, Callable, Union, Dict
 
 import numpy as np
 import torch
@@ -121,7 +121,7 @@ class Learner:
         return filepath
 
     def validate(self, loader: torch.utils.data.DataLoader, criterion: torch.nn.Module,
-                 metrics: List[Tuple[str, torch.nn.Module]] = None, non_blocking=False):
+                 metrics: Dict[str, torch.nn.Module] = None, non_blocking=False):
         if loader is None:
             raise Exception('Loader cannot be None.')
 
@@ -157,23 +157,23 @@ class Learner:
         assert isinstance(predictor, Task)
         self.__predictor = predictor
 
-    def __init_metrics(self, metrics: List[Tuple[str, torch.nn.Module]]):
+    def __init_metrics(self, metrics:  Dict[str, torch.nn.Module]):
         if metrics is None:
             return
-        unique_metrics = set()
-        for metric_name, _ in metrics:
-            if metric_name in unique_metrics:
-                raise ValueError("Metrics names should be unique")
-            unique_metrics.add(metric_name)
+
+        for metric_name, _ in metrics.items():
+            if metric_name == "loss":
+                raise ValueError("Metric name 'loss' is reserved of criterion")
             self.__metrics_dict[metric_name] = 0
 
-    def __update_metrics(self, outputs: torch.Tensor, targets: torch.Tensor, metrics: List[Tuple[str, torch.nn.Module]],
+    def __update_metrics(self, outputs: torch.Tensor, targets: torch.Tensor, metrics: Dict[str, torch.nn.Module],
                          step: int):
 
         if metrics is None:
             return
+
         with torch.no_grad():
-            for metric_name, metric_instance in metrics:
+            for metric_name, metric_instance in metrics.items():
                 self.__metrics_dict[metric_name] = self.__metrics_dict[metric_name] + \
                                                    ((metric_instance(outputs, targets).item() - self.__metrics_dict[
                                                        metric_name]) / step)
@@ -201,7 +201,7 @@ class Learner:
     def fit(self, train_loader: torch.utils.data.DataLoader, val_loader: torch.utils.data.DataLoader = None,
             epochs: int = 10, steps_per_epoch: int = None,
             save_model_after_every_epoch: int = 5, lr_scheduler=None, lr_scheduler_step_policy: str = 'epoch',
-            metrics: List[Tuple[str, torch.nn.Module]] = None, image_inverse_transform: Callable = None,
+            metrics: Dict[str, torch.nn.Module] = None, image_inverse_transform: Callable = None,
             logger_img_size=Union[int, Tuple[int, int]],
             non_blocking=False):
 
@@ -235,9 +235,9 @@ class Learner:
                                         Default is deepml.transforms.ImageNetInverseTransform() which is
                                         an inverse of ImageNet normalization.
 
-        :param metrics: list of tuples ('metric_name', metric instance) to monitor.
+        :param metrics: dictionary of metrics 'metric_name': metric instance to monitor.
                         Metric name is used as label for logging metric value to console and tensorboard.
-                        Metric instance must be subclass of torch.nn.Module, implements forward function and
+                        Metric instance must be subclass of torch.nn.Module, which implements forward function and
                         returns calculated value.
 
         :param logger_img_size:  image size to use for writing images to tensorboard
@@ -258,7 +258,7 @@ class Learner:
 
         # Check valid metrics types
         if metrics:
-            for metric_name, metric_instance in metrics:
+            for metric_name, metric_instance in metrics.items():
                 if not (isinstance(metric_instance, torch.nn.Module) and hasattr(metric_instance, 'forward')):
                     raise TypeError(f'{metric_instance.__class__} is not supported')
 

@@ -1,6 +1,6 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Union, Tuple, Any, List, Sequence, Callable
+from typing import Union, Tuple, Any, List, Sequence, Callable, Dict
 
 import numpy as np
 import torch
@@ -115,6 +115,11 @@ class Task(ABC):
                                    global_step, img_size=224):
         pass
 
+    @abstractmethod
+    def evaluate(self, loader: torch.utils.data.DataLoader, criterion: torch.nn.Module,
+                 metrics: Dict[str, torch.nn.Module] = None, non_blocking=False):
+        pass
+
 
 class NeuralNetTask(Task):
     """
@@ -172,6 +177,36 @@ class NeuralNetTask(Task):
     def write_prediction_to_logger(self, tag, loader, logger, image_inverse_transform,
                                    global_step, img_size=224):
         pass
+
+    @torch.no_grad()
+    def evaluate(self, loader: torch.utils.data.DataLoader, metrics: Dict[str, torch.nn.Module] = None,
+                 non_blocking=False):
+        if loader is None:
+            raise Exception('Loader cannot be None.')
+
+        self._model.eval()
+        metrics_dict = {metric_name: 0 for metric_name, _ in metrics}
+
+        bar = tqdm(total=len(loader), desc="{:12s}".format('Evaluation'))
+
+        for batch_index, (x, y) in enumerate(loader):
+
+            outputs = self.predict_batch(x, y, non_blocking)
+
+            if isinstance(y, torch.Tensor):
+                y = y.to(self._device)
+
+            if isinstance(outputs, torch.Tensor) and outputs.ndim == 2 and outputs.shape[1] == 1:
+                y = y.view_as(outputs)
+
+            for metric_name, metric_instance in metrics.items():
+                metrics_dict[metric_name] = metrics_dict[metric_name] + \
+                                                   ((metric_instance(outputs, y).item() - metrics_dict[
+                                                       metric_name]) / (batch_index + 1))
+            bar.update(1)
+            bar.set_postfix({name: f'{round(value, 4)}' for name, value in metrics_dict.items()})
+
+        return metrics_dict
 
 
 class Segmentation(NeuralNetTask):
