@@ -134,7 +134,7 @@ class NeuralNetTask(Task):
                                             model_file_name, use_gpu)
 
     def predict_batch(self, x: torch.Tensor, *args, **kwargs):
-        x = self.move_input_to_device(x, *args, **kwargs)
+        x = self.move_input_to_device(x, **kwargs)
         return self._model(x)
 
     def predict(self, loader: torch.utils.data.DataLoader):
