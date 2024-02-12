@@ -16,28 +16,42 @@ from deepml.tracking import MLExperimentLogger, TensorboardLogger
 
 class Learner:
 
-    def __init__(self, task: Task, optimizer: torch.optim.Optimizer, criterion: torch.nn.Module,
-                 load_optimizer_state: bool = False, logger: MLExperimentLogger = None):
+    def __init__(self, task: Task, optimizer: torch.optim.Optimizer,
+                 criterion: torch.nn.Module,
+                 lr_scheduler=None,
+                 lr_scheduler_step_policy: str = "epoch",
+                 load_state: bool = False,
+                 logger: MLExperimentLogger = None):
         """
-        Training class for learning a model weights using predictor and optimizer.
+        Training class for learning a model weights using particular task.
 
         :param task: Object of sub class deepml.tasks.Task
         :param optimizer: The optimizer from torch.optim
         :param criterion: The loss function
-        :param load_optimizer_state: Weather to load optimizer state to resume model training. Default is False.
-                                     If true, optimizer state is loaded with load_state_dict and history of epoch.
+        :param load_state: Weather to resume model training. Default is False.
+                            If true, optimizer state is loaded with load_state_dict and history of epoch.
+                            Also, lr_scheduler state is reinitialized if any.
+        :param lr_scheduler: the learning rate scheduler, default is None.
+        :param lr_scheduler_step_policy: It is the time when lr_scheduler.step() would be called.
+                                         Default is "epoch" policy.
+                                         Use "batch" policy if you want lr_scheduler.step() to be
+                                         called after each gradient step.
         """
-
         assert isinstance(task, Task)
-        assert isinstance(optimizer, torch.optim.Optimizer)
-        assert isinstance(criterion, torch.nn.Module)
 
         self.__predictor = task
         self.__model = self.__predictor.model
         self.__model_dir = self.__predictor.model_dir
         self.__model_file_name = self.__predictor.model_file_name
-        self.__optimizer = optimizer
-        self.__criterion = criterion
+        self.__optimizer = None
+        self.__criterion = None
+        self.__lr_scheduler = None
+        self.__lr_scheduler_step_policy = None
+
+        self.set_optimizer(optimizer)
+        self.set_criterion(criterion)
+        self.set_lr_scheduler(lr_scheduler, lr_scheduler_step_policy)
+
         self.epochs_completed = 0
         self.best_val_loss = np.inf
         self.history = defaultdict(list)
@@ -49,8 +63,8 @@ class Learner:
 
         self.__metrics_dict = OrderedDict({'loss': 0})
 
-        if load_optimizer_state:
-            self.__load_optimizer_state()
+        if load_state:
+            self.__load_state()
 
         self.__device = self.__predictor.device
         self.set_device(self.__device)
@@ -62,6 +76,13 @@ class Learner:
     def set_criterion(self, criterion: torch.nn.Module):
         assert isinstance(criterion, torch.nn.Module)
         self.__criterion = criterion
+
+    def set_lr_scheduler(self, lr_scheduler, lr_scheduler_step_policy: str = "epoch"):
+        if lr_scheduler:
+            lr_scheduler_step_policy = lr_scheduler_step_policy.lower()
+            assert isinstance(lr_scheduler_step_policy, str) and lr_scheduler_step_policy in ['epoch', 'batch']
+            self.__lr_scheduler = lr_scheduler
+            self.__lr_scheduler_step_policy = lr_scheduler_step_policy
 
     def set_device(self, device: str):
         assert isinstance(device, str) and device.lower() in ['cpu', 'cuda']
@@ -75,25 +96,42 @@ class Learner:
                 if type(optim_state_values_dict[key]) == torch.Tensor:
                     optim_state_values_dict[key] = optim_state_values_dict[key].to(self.__device)
 
-    def __load_optimizer_state(self):
+    def __load_state(self):
+
         model_path = os.path.join(self.__model_dir, self.__model_file_name)
         if os.path.exists(model_path):
             state_dict = (torch.load(model_path) if torch.cuda.is_available()
                           else torch.load(model_path, map_location=torch.device('cpu')))
-            if 'optimizer' in state_dict:
-                if state_dict['optimizer'] == self.__optimizer.__class__.__name__:
-                    self.__optimizer.load_state_dict(state_dict['optimizer_state'])
-                else:
-                    print(f"Skipping load optimizer state because {self.__optimizer.__class__.__name__}"
-                          f" != {state_dict['optimizer']}")
-
-            if 'epoch' in state_dict:
-                self.epochs_completed = state_dict['epoch']
-
-            if 'metrics' in state_dict and 'val_loss' in state_dict['metrics']:
-                self.best_val_loss = state_dict['metrics']['val_loss']
         else:
             print(f'{model_path} does not exist.')
+            return
+
+        self.__load_optimizer_state(state_dict)
+
+        if self.__lr_scheduler:
+            self.__load_lr_schedular_state(state_dict)
+
+        if 'epoch' in state_dict:
+            self.epochs_completed = state_dict['epoch']
+
+        if 'metrics' in state_dict and 'val_loss' in state_dict['metrics']:
+            self.best_val_loss = state_dict['metrics']['val_loss']
+
+    def __load_optimizer_state(self, state_dict):
+        if 'optimizer' in state_dict and 'optimizer_state' in state_dict:
+            if state_dict['optimizer'] == self.__optimizer.__class__.__name__:
+                self.__optimizer.load_state_dict(state_dict['optimizer_state'])
+            else:
+                print(f"Skipping load optimizer state because {self.__optimizer.__class__.__name__}"
+                      f" != {state_dict['optimizer']}")
+
+    def __load_lr_schedular_state(self, state_dict):
+        if 'lr_scheduler' in state_dict and 'lr_scheduler_state' in state_dict:
+            if state_dict['lr_scheduler'] == self.__lr_scheduler.__class__.__name__:
+                self.__lr_scheduler.load_state_dict(state_dict['lr_scheduler_state'])
+            else:
+                print(f"Skipping load lr scheduler state because {self.__lr_scheduler.__class__.__name__}"
+                      f" != {state_dict['lr_scheduler']}")
 
     def save(self, tag: str, save_optimizer_state: bool = False, epoch: int = -1, train_loss: float = None,
              val_loss: float = None):
@@ -104,6 +142,10 @@ class Learner:
         if save_optimizer_state:
             save_dict['optimizer'] = self.__optimizer.__class__.__name__
             save_dict['optimizer_state'] = self.__optimizer.state_dict()
+
+        if self.__lr_scheduler:
+            save_dict['lr_scheduler'] = self.__lr_scheduler.__class__.__name__
+            save_dict['lr_scheduler_state'] = self.__lr_scheduler.state_dict()
 
         if type(epoch) == int:
             save_dict['epoch'] = epoch
@@ -157,7 +199,7 @@ class Learner:
         assert isinstance(predictor, Task)
         self.__predictor = predictor
 
-    def __init_metrics(self, metrics:  Dict[str, torch.nn.Module]):
+    def __init_metrics(self, metrics: Dict[str, torch.nn.Module]):
         if metrics is None:
             return
 
@@ -200,7 +242,7 @@ class Learner:
 
     def fit(self, train_loader: torch.utils.data.DataLoader, val_loader: torch.utils.data.DataLoader = None,
             epochs: int = 10, steps_per_epoch: int = None,
-            save_model_after_every_epoch: int = 5, lr_scheduler=None, lr_scheduler_step_policy: str = 'epoch',
+            save_model_after_every_epoch: int = 5,
             metrics: Dict[str, torch.nn.Module] = None, image_inverse_transform: Callable = None,
             logger_img_size=Union[int, Tuple[int, int]],
             non_blocking=False):
@@ -222,13 +264,6 @@ class Learner:
 
         :param save_model_after_every_epoch: To save the model after every number of completed epochs
                                             Default is 5.
-
-        :param lr_scheduler: the learning rate scheduler, default is None.
-
-        :param lr_scheduler_step_policy: It is the time when lr_scheduler.step() would be called.
-                                         Default is "epoch" policy.
-                                         Use "batch" policy if you want lr_scheduler.step() to be
-                                         called after each gradient step.
 
         :param image_inverse_transform: It denotes reverse transformations of image normalization so that images
                                         can be displayed on tensor board.
@@ -254,18 +289,13 @@ class Learner:
 
         # Log params
         self.logger.log_params(task=self.__predictor, loader=val_loader, epochs=epochs, criterion=self.__criterion,
-                               lr_scheduler=lr_scheduler)
+                               lr_scheduler=self.__lr_scheduler)
 
         # Check valid metrics types
         if metrics:
             for metric_name, metric_instance in metrics.items():
                 if not (isinstance(metric_instance, torch.nn.Module) and hasattr(metric_instance, 'forward')):
                     raise TypeError(f'{metric_instance.__class__} is not supported')
-
-        # Check valid policy for lr_scheduler
-        if lr_scheduler is not None:
-            lr_scheduler_step_policy = lr_scheduler_step_policy.lower()
-            assert isinstance(lr_scheduler_step_policy, str) and lr_scheduler_step_policy in ['epoch', 'batch']
 
         # Replace all metrics during call to learner fit
         self.__metrics_dict = OrderedDict({'loss': 0})
@@ -306,8 +336,8 @@ class Learner:
 
                 self.__optimizer.step()
 
-                if lr_scheduler and lr_scheduler_step_policy == "batch":
-                    lr_scheduler.step()
+                if self.__lr_scheduler and self.__lr_scheduler_step_policy == "batch":
+                    self.__lr_scheduler.step()
 
                 step = step + 1
                 self.__metrics_dict['loss'] = self.__metrics_dict['loss'] + ((loss.item() - self.__metrics_dict['loss'])
@@ -353,11 +383,11 @@ class Learner:
                               train_loss=train_loss,
                               val_loss=val_loss)
 
-            if lr_scheduler and lr_scheduler_step_policy == "epoch":
-                if val_loader and isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    lr_scheduler.step(val_loss)
+            if self.__lr_scheduler and self.__lr_scheduler_step_policy == "epoch":
+                if val_loader and isinstance(self.__lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    self.__lr_scheduler.step(val_loss)
                 else:
-                    lr_scheduler.step()
+                    self.__lr_scheduler.step()
 
             print(message)
             if self.epochs_completed % save_model_after_every_epoch == 0:
