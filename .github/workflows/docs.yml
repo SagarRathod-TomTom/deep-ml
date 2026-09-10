@@ -37,7 +37,7 @@ jobs:
             ${{ runner.os }}-poetry-docs-
 
       - name: Install Poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
           poetry-version: "2.2.1"
 

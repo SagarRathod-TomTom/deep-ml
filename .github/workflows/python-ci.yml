@@ -30,7 +30,7 @@ jobs:
             ${{ runner.os }}-poetry-
 
       - name: Install Poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
           poetry-version: "2.2.1"
 
@@ -75,7 +75,7 @@ jobs:
             ${{ runner.os }}-py${{ matrix.python-version }}-poetry-
 
       - name: Install Poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
           poetry-version: "2.2.1"
 
@@ -113,7 +113,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Poetry
-        uses: abatilo/actions-poetry@v3
+        uses: abatilo/actions-poetry@v4
         with:
           poetry-version: "2.2.1"
 
