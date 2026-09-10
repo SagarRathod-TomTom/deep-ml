@@ -16,7 +16,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Label based on changed files
         uses: actions/labeler@v5
@@ -47,7 +47,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: PR Title Validation
         # Dependabot writes its own titles ("deps(deps): bump x from 1 to 2") and no
